@@ -587,20 +587,6 @@ def taskbar() -> rx.Component:
 def index() -> rx.Component:
     """The main desktop view."""
     return rx.box(
-        # Beautiful gradient background wallpaper
-        style={
-            "background": "radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), "
-                          "radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), "
-                          "radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%), "
-                          "radial-gradient(at 0% 100%, hsla(339,49%,30%,1) 0, transparent 50%), "
-                          "radial-gradient(at 100% 100%, hsla(256,40%,25%,1) 0, transparent 50%)",
-            "background-color": "hsla(253,16%,7%,1)",
-            "width": "100vw",
-            "height": "100vh",
-            "overflow": "hidden",
-            "position": "relative",
-        },
-        
         # Grid of Desktop Icons (Top Left)
         rx.vstack(
             desktop_icon("File Explorer", "folder"),
@@ -628,6 +614,20 @@ def index() -> rx.Component:
         
         # Bottom Taskbar
         taskbar(),
+        
+        # Beautiful gradient background wallpaper
+        style={
+            "background": "radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), "
+                          "radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), "
+                          "radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%), "
+                          "radial-gradient(at 0% 100%, hsla(339,49%,30%,1) 0, transparent 50%), "
+                          "radial-gradient(at 100% 100%, hsla(256,40%,25%,1) 0, transparent 50%)",
+            "background-color": "hsla(253,16%,7%,1)",
+            "width": "100vw",
+            "height": "100vh",
+            "overflow": "hidden",
+            "position": "relative",
+        },
     )
 
 
