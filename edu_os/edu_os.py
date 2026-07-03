@@ -38,6 +38,9 @@ class OSState(rx.State):
     # Text Editor state
     notepad_text: str = "Welcome to EduOS! Double-click on any desktop icon to open the corresponding application. Feel free to explore."
 
+    def set_notepad_text(self, text: str):
+        self.notepad_text = text
+
     # App management
     def open_app(self, name: str):
         # If already open, bring to front (by removing and appending to end of list)
