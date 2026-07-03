@@ -282,6 +282,37 @@ def render_calculator() -> rx.Component:
         ["1", "2", "3", "-"],
         ["C", "0", "=", "+"]
     ]
+    
+    # Use standard Python loop to build components (evaluates at compile time)
+    rows_components = []
+    for row in buttons:
+        row_components = []
+        for btn in row:
+            # Check button type at compile time using static Python logic
+            if btn == "=":
+                bg = "rgba(20, 110, 190, 0.6)"
+            elif btn == "C":
+                bg = "rgba(240, 80, 80, 0.6)"
+            elif btn in ["+", "-", "*", "/"]:
+                bg = "rgba(255, 255, 255, 0.2)"
+            else:
+                bg = "rgba(255, 255, 255, 0.12)"
+                
+            row_components.append(
+                rx.button(
+                    btn,
+                    on_click=OSState.calc_press(btn),
+                    color="white",
+                    background=bg,
+                    _hover={"background": "rgba(255, 255, 255, 0.25)"},
+                    width="full",
+                    height="12",
+                    font_size="md",
+                    font_weight="semibold",
+                )
+            )
+        rows_components.append(rx.hstack(*row_components, width="full", spacing="2"))
+        
     return rx.vstack(
         rx.box(
             rx.text(
@@ -305,30 +336,10 @@ def render_calculator() -> rx.Component:
             border_radius="md",
             border="1px solid rgba(255, 255, 255, 0.1)",
         ),
-        rx.grid(
-            rx.foreach(
-                buttons,
-                lambda row: rx.foreach(
-                    row,
-                    lambda btn: rx.button(
-                        btn,
-                        on_click=OSState.calc_press(btn),
-                        color="white",
-                        background="rgba(255, 255, 255, 0.12)" if btn not in ["+", "-", "*", "/", "=", "C"]
-                        else "rgba(20, 110, 190, 0.6)" if btn == "="
-                        else "rgba(240, 80, 80, 0.6)" if btn == "C"
-                        else "rgba(255, 255, 255, 0.2)",
-                        _hover={"background": "rgba(255, 255, 255, 0.25)"},
-                        width="full",
-                        height="12",
-                        font_size="md",
-                        font_weight="semibold",
-                    )
-                )
-            ),
-            columns="4",
-            spacing="2",
+        rx.vstack(
+            *rows_components,
             width="full",
+            spacing="2",
         ),
         width="280px",
         spacing="3",
@@ -345,7 +356,7 @@ def render_terminal() -> rx.Component:
                     OSState.terminal_logs,
                     lambda log: rx.text(
                         log,
-                        color="green.300" if "guest@edu_os" in log else "white" if not log.startswith(" ") else "gray.400",
+                        color="green.300",
                         font_family="monospace",
                         font_size="xs",
                         white_space="pre-wrap"
@@ -440,10 +451,19 @@ def render_window(title: str) -> rx.Component:
             rx.hstack(
                 rx.hstack(
                     rx.icon(
-                        tag="terminal" if title == "Terminal" 
-                        else "folder" if title == "File Explorer"
-                        else "calculator" if title == "Calculator"
-                        else "file-text",
+                        tag=rx.cond(
+                            title == "Terminal",
+                            "terminal",
+                            rx.cond(
+                                title == "File Explorer",
+                                "folder",
+                                rx.cond(
+                                    title == "Calculator",
+                                    "calculator",
+                                    "file-text"
+                                )
+                            )
+                        ),
                         size=14,
                         color="gray.300"
                     ),
