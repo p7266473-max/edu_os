@@ -12,13 +12,24 @@ class Draggable(rx.Component):
     def create(cls, *children, **props):
         return super().create(*children, **props)
 
+
 class OSState(rx.State):
+    # CENTRALIZED SYSTEM STATE DRIVERS
     # Active windows list: list of dicts with title, minimized, maximized
     active_windows: list[dict] = []
     
+    # Process Lifecycle Manager
+    # Maps app/window title to simulated PID
+    processes: dict[str, int] = {}
+    next_pid: int = 1010
+    
+    # System Status ("nominal", "loading", "error")
+    system_status: str = "nominal"
+    status_message: str = "System status: Nominal"
+    
     # Simple File System
     file_system: dict[str, list[str]] = {
-        "C_Drive": ["System32", "Users", "Program Files", "kernel.sys", "config.json"],
+        "C_Drive": ["System32", "Users", "Program_Files", "kernel.sys", "config.json"],
         "D_Drive": ["Documents", "Downloads", "SPM_Project", "edu_os_specs.md", "notes.txt"]
     }
     
@@ -31,47 +42,79 @@ class OSState(rx.State):
     calc_input: str = ""
     calc_result: str = "0"
     
-    # Terminal logs
+    # Terminal logs (Linux Lite 7.4 Bash style)
     terminal_logs: list[str] = [
-        "EduOS Kernel v1.0.0 (x86_64)",
-        "Initializing virtual memory manager...",
-        "Mounting file system: C_Drive, D_Drive...",
-        "System Ready. Welcome to EduOS!",
-        "guest@edu_os:~$ "
+        "Welcome to Linux Lite 7.4 LTS (GNU/Linux 6.8.0-generic x86_64)",
+        " * Documentation:  https://www.linuxliteos.com/forums/",
+        " * Support:        https://www.linuxliteos.com/helpmanual/",
+        "",
+        "Type 'help' to see simulated commands.",
+        "user@linuxlite-7:~$ "
     ]
     
     # Text Editor state
     notepad_text: str = "Welcome to EduOS! Double-click on any desktop icon to open the corresponding application. Feel free to explore."
 
-    def set_notepad_text(self, text: str):
-        self.notepad_text = text
-
-    # App management
+    # App/Process Lifecycle Management
     def open_app(self, name: str):
-        # If already open, bring to front (by removing and appending to end of list)
+        self.system_status = "loading"
+        self.status_message = f"Launching {name}..."
+        
+        # If already open, bring to front
         for window in self.active_windows:
             if window["title"] == name:
                 self.active_windows.remove(window)
                 self.active_windows.append(window)
+                self.system_status = "nominal"
+                self.status_message = f"Focused {name}"
                 return
         
-        # Add a new window config
+        # Register process PID
+        pid = self.next_pid
+        self.processes[name] = pid
+        self.next_pid += 1
+        
+        # Add to active windows
         self.active_windows.append({
             "title": name,
             "minimized": False,
             "maximized": False,
         })
+        
+        self.system_status = "nominal"
+        self.status_message = f"Started {name} (PID: {pid})"
 
     def close_app(self, name: str):
+        self.system_status = "loading"
+        self.status_message = f"Terminating {name}..."
+        
+        # Clean up window
         self.active_windows = [w for w in self.active_windows if w["title"] != name]
+        
+        # Clean up process
+        if name in self.processes:
+            del self.processes[name]
+            
+        self.system_status = "nominal"
+        self.status_message = f"Terminated {name} process."
+
+    def kill_process(self, name: str):
+        self.close_app(name)
+
+    # Notepad explicit setter
+    def set_notepad_text(self, text: str):
+        self.notepad_text = text
 
     # File Explorer
     def select_drive(self, drive: str):
+        self.system_status = "loading"
         self.current_drive = drive
         self.selected_file = ""
         self.file_content = ""
+        self.system_status = "nominal"
 
     def read_file(self, filename: str):
+        self.system_status = "loading"
         self.selected_file = filename
         if filename == "edu_os_specs.md":
             self.file_content = "# EduOS System Specifications\n- Kernel: Custom Reflex OSState\n- Architecture: Web-Native\n- UI Framework: Radix UI / Tailwind CSS\n- Project Directory: /KE/SPM"
@@ -83,6 +126,7 @@ class OSState(rx.State):
             self.file_content = "[BINARY DATA: 0x4A6B9C2D3E4F]"
         else:
             self.file_content = f"Contents of {filename} (Read-Only Mode)"
+        self.system_status = "nominal"
 
     # Calculator
     def calc_press(self, key: str):
@@ -90,52 +134,91 @@ class OSState(rx.State):
             self.calc_input = ""
             self.calc_result = "0"
         elif key == "=":
+            self.system_status = "loading"
             try:
                 allowed_chars = "0123456789+-*/. "
                 if all(c in allowed_chars for c in self.calc_input):
                     self.calc_result = str(eval(self.calc_input))
                 else:
                     self.calc_result = "Error"
+                    self.system_status = "error"
             except Exception:
                 self.calc_result = "Error"
+                self.system_status = "error"
             self.calc_input = self.calc_result
+            if self.system_status != "error":
+                self.system_status = "nominal"
         else:
             if self.calc_input == "0" or self.calc_result == "Error":
                 self.calc_input = key
             else:
                 self.calc_input += key
 
-    # Terminal command handler
+    # Terminal command handler (Linux Lite 7.4 Bash style)
     def execute_terminal_cmd(self, form_data: dict):
         cmd = form_data.get("terminal_input", "").strip()
         if not cmd:
             return
         
-        self.terminal_logs.append(f"guest@edu_os:~$ {cmd}")
+        self.system_status = "loading"
+        self.terminal_logs.append(f"user@linuxlite-7:~$ {cmd}")
         cmd_parts = cmd.split()
         base_cmd = cmd_parts[0].lower()
         
         if base_cmd == "help":
             self.terminal_logs.extend([
-                "Available commands:",
+                "Linux Lite 7.4 Shell Simulator. Available commands:",
                 "  help       - Show this message",
-                "  ls         - List files in current directory",
-                "  cat [file] - Display file content",
-                "  clear      - Clear terminal logs",
-                "  neofetch   - Display system specs"
+                "  ls         - List files in virtual current directory",
+                "  cat [file] - Display contents of a virtual file",
+                "  clear      - Clear terminal window logs",
+                "  neofetch   - Display system logo and specifications",
+                "  ps         - List running simulation processes",
+                "  kill [PID] - Terminate a process by its PID ID"
             ])
         elif base_cmd == "clear":
-            self.terminal_logs = ["guest@edu_os:~$ "]
+            self.terminal_logs = ["user@linuxlite-7:~$ "]
+            self.system_status = "nominal"
             return
         elif base_cmd == "ls":
             self.terminal_logs.append("C_Drive/  D_Drive/")
+        elif base_cmd == "ps":
+            self.terminal_logs.append("  PID TTY          TIME CMD")
+            for name, pid in self.processes.items():
+                self.terminal_logs.append(f" {pid} pts/0    00:00:00 {name.lower().replace(' ', '_')}")
+        elif base_cmd == "kill":
+            if len(cmd_parts) > 1:
+                try:
+                    pid_to_kill = int(cmd_parts[1])
+                    found = False
+                    for name, pid in list(self.processes.items()):
+                        if pid == pid_to_kill:
+                            self.close_app(name)
+                            self.terminal_logs.append(f"Process {pid_to_kill} ({name}) terminated.")
+                            found = True
+                            break
+                    if not found:
+                        self.terminal_logs.append(f"kill: ({pid_to_kill}) - No such process")
+                except ValueError:
+                    self.terminal_logs.append("kill: invalid PID operand")
+            else:
+                self.terminal_logs.append("kill: missing PID operand")
         elif base_cmd == "neofetch":
+            # Cool Linux Lite ascii feather logo
             self.terminal_logs.extend([
-                "   /\\_/\\      OS: EduOS v1.0.0",
-                "  ( o.o )     Kernel: Python 3.10 / Reflex",
-                "   > ^ <      Uptime: 2 mins",
-                "              Shell: Bash-Interactive",
-                "              Memory: 256MB / 4096MB"
+                "   .---.        user@linuxlite-7",
+                "  /     \\       ----------------",
+                "  \\  (o) /      OS: Linux Lite 7.4 LTS x86_64",
+                "   '---'        Host: Virtual reflex Machine",
+                "  /     \\       Kernel: 6.8.0-generic",
+                " |   |   |      Uptime: 45 mins",
+                " |   |   |      Shell: bash 5.2.15",
+                "  \\     /       Resolution: 1920x1080",
+                "   `---`        DE: XFCE 4.18",
+                "                WM: Xfwm4",
+                "                Terminal: xfce4-terminal",
+                "                CPU: AMD Ryzen 9 virtual (4) @ 3.40GHz",
+                "                Memory: 1240MiB / 4096MiB"
             ])
         elif base_cmd == "cat":
             if len(cmd_parts) > 1:
@@ -149,21 +232,22 @@ class OSState(rx.State):
                         elif filename == "notes.txt":
                             self.terminal_logs.append("This is a simple text note.")
                         else:
-                            self.terminal_logs.append(f"[Mock Content of {filename}]")
+                            self.terminal_logs.append(f"[Binary/Text Mock Content of {filename}]")
                 if not found:
                     self.terminal_logs.append(f"cat: {filename}: No such file or directory")
             else:
                 self.terminal_logs.append("cat: missing file operand")
         else:
-            self.terminal_logs.append(f"sh: command not found: {base_cmd}")
+            self.terminal_logs.append(f"bash: {base_cmd}: command not found")
             
-        self.terminal_logs.append("guest@edu_os:~$ ")
+        self.terminal_logs.append("user@linuxlite-7:~$ ")
+        self.system_status = "nominal"
 
 
 # ------------------- UI COMPONENTS -------------------
 
 def desktop_icon(name: str, icon_tag: str) -> rx.Component:
-    """Renders a double-clickable or single-clickable desktop icon."""
+    """Renders a desktop icon bound to state drivers."""
     return rx.button(
         rx.vstack(
             rx.icon(
@@ -291,12 +375,10 @@ def render_calculator() -> rx.Component:
         ["C", "0", "=", "+"]
     ]
     
-    # Use standard Python loop to build components (evaluates at compile time)
     rows_components = []
     for row in buttons:
         row_components = []
         for btn in row:
-            # Check button type at compile time using static Python logic
             if btn == "=":
                 bg = "rgba(20, 110, 190, 0.6)"
             elif btn == "C":
@@ -382,7 +464,7 @@ def render_terminal() -> rx.Component:
         ),
         rx.form(
             rx.hstack(
-                rx.text("guest@edu_os:~$", color="green.300", font_family="monospace", font_size="xs", align_self="center"),
+                rx.text("user@linuxlite-7:~$", color="green.300", font_family="monospace", font_size="xs", align_self="center"),
                 rx.input(
                     id="terminal_input",
                     placeholder="Type help...",
@@ -432,6 +514,51 @@ def render_notepad() -> rx.Component:
     )
 
 
+def render_system_monitor() -> rx.Component:
+    """Renders the simulated System Monitor application."""
+    return rx.vstack(
+        rx.text("Active Processes", font_size="sm", font_weight="bold", color="teal.300"),
+        rx.table.root(
+            rx.table.header(
+                rx.table.row(
+                    rx.table.column_header_cell("PID"),
+                    rx.table.column_header_cell("Process Name"),
+                    rx.table.column_header_cell("Status"),
+                    rx.table.column_header_cell("Action"),
+                )
+            ),
+            rx.table.body(
+                rx.foreach(
+                    OSState.processes,
+                    lambda proc: rx.table.row(
+                        rx.table.cell(proc[1].to_string()),
+                        rx.table.cell(proc[0]),
+                        rx.table.cell(
+                            rx.badge(
+                                "Running",
+                                color_scheme="green",
+                                variant="soft",
+                            )
+                        ),
+                        rx.table.cell(
+                            rx.button(
+                                "Kill",
+                                on_click=OSState.kill_process(proc[0]),
+                                size="1",
+                                color_scheme="red",
+                                variant="solid",
+                            )
+                        ),
+                    )
+                )
+            ),
+            width="full",
+        ),
+        width="450px",
+        spacing="3",
+    )
+
+
 def render_window(title: str) -> rx.Component:
     """Renders a styled, draggable window frame with specific application contents."""
     # Determine which sub-view to inject inside the window body
@@ -447,7 +574,11 @@ def render_window(title: str) -> rx.Component:
                 rx.cond(
                     title == "Notepad",
                     render_notepad(),
-                    rx.text(f"Welcome to {title}!", color="white")
+                    rx.cond(
+                        title == "System Monitor",
+                        render_system_monitor(),
+                        rx.text(f"Welcome to {title}!", color="white")
+                    )
                 )
             )
         )
@@ -468,7 +599,11 @@ def render_window(title: str) -> rx.Component:
                                 rx.cond(
                                     title == "Calculator",
                                     "calculator",
-                                    "file-text"
+                                    rx.cond(
+                                        title == "System Monitor",
+                                        "activity",
+                                        "file-text"
+                                    )
                                 )
                             )
                         ),
@@ -537,8 +672,53 @@ def render_window(title: str) -> rx.Component:
                 "border": "1px solid rgba(255, 255, 255, 0.15)",
                 "border-radius": "12px",
                 "z-index": "50",
+                "pointer-events": "auto",  # Re-enable events inside individual windows
             },
         ),
+    )
+
+
+def system_status_indicator() -> rx.Component:
+    """Renders a reactive status indicator showing the health of the system state."""
+    color = rx.cond(
+        OSState.system_status == "loading",
+        "orange",
+        rx.cond(
+            OSState.system_status == "error",
+            "red",
+            "emerald"
+        )
+    )
+    
+    glow_color = rx.cond(
+        OSState.system_status == "loading",
+        "rgba(245, 158, 11, 0.5)",
+        rx.cond(
+            OSState.system_status == "error",
+            "rgba(239, 68, 68, 0.5)",
+            "rgba(16, 185, 129, 0.5)"
+        )
+    )
+    
+    return rx.hstack(
+        rx.box(
+            width="3",
+            height="3",
+            border_radius="full",
+            background=f"{color}.400",
+            style={
+                "box-shadow": f"0 0 10px {glow_color}",
+                "transition": "all 0.3s ease",
+            },
+        ),
+        rx.text(
+            OSState.status_message,
+            color="gray.300",
+            font_size="xs",
+            font_family="monospace"
+        ),
+        spacing="2",
+        align="center",
     )
 
 
@@ -588,6 +768,7 @@ def taskbar() -> rx.Component:
             
             # System Clock and indicators (right-aligned)
             rx.hstack(
+                system_status_indicator(),
                 rx.icon(tag="wifi", size=14, color="white"),
                 rx.icon(tag="volume-2", size=14, color="white"),
                 rx.text("14:24", color="white", font_size="xs", font_weight="bold"),
@@ -621,10 +802,12 @@ def index() -> rx.Component:
             desktop_icon("Calculator", "calculator"),
             desktop_icon("Terminal", "terminal"),
             desktop_icon("Notepad", "file-text"),
+            desktop_icon("System Monitor", "activity"),
             position="absolute",
             top="6",
             left="6",
             spacing="4",
+            z_index="10",  # Keep icons above desktop background but below overlays
         ),
         
         # Render all active app windows
@@ -638,6 +821,8 @@ def index() -> rx.Component:
             left="0",
             width="full",
             height="full",
+            pointer_events="none",  # Allow clicks to pass through empty window container space
+            z_index="20",
         ),
         
         # Bottom Taskbar
@@ -655,6 +840,7 @@ def index() -> rx.Component:
             "height": "100vh",
             "overflow": "hidden",
             "position": "relative",
+            "z-index": "1",
         },
     )
 
@@ -666,4 +852,4 @@ app = rx.App(
         accent_color="teal",
     )
 )
-app.add_page(index, title="EduOS - Virtual reflex Learning Environment")
+app.add_page(index, title="EduOS - Linux Lite Virtual Learning OS")
