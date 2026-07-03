@@ -1,48 +1,20 @@
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
 *.so
-.Python
+.env
 env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
+venv/
 *.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
 
 # Reflex
 .web/
 .states/
-.env
-*.db
-assets/external/
 reflex.lock/
 
-# Virtual Environments
-.venv/
-venv/
-ENV/
-env.bak/
-venv.bak/
+# Docker
+*.tar
 
-# IDEs
-.vscode/
-.idea/
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.swp
+# OS
+.DS_Store
+Thumbs.db

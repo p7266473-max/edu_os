@@ -15,841 +15,503 @@ class Draggable(rx.Component):
 
 class OSState(rx.State):
     # CENTRALIZED SYSTEM STATE DRIVERS
-    # Active windows list: list of dicts with title, minimized, maximized
     active_windows: list[dict] = []
-    
-    # Process Lifecycle Manager
-    # Maps app/window title to simulated PID
     processes: dict[str, int] = {}
     next_pid: int = 1010
-    
-    # System Status ("nominal", "loading", "error")
     system_status: str = "nominal"
     status_message: str = "System status: Nominal"
-    
-    # Simple File System
+
     file_system: dict[str, list[str]] = {
         "C_Drive": ["System32", "Users", "Program_Files", "kernel.sys", "config.json"],
-        "D_Drive": ["Documents", "Downloads", "SPM_Project", "edu_os_specs.md", "notes.txt"]
+        "D_Drive": ["Documents", "Downloads", "SPM_Project", "edu_os_specs.md", "notes.txt"],
     }
-    
-    # Drive navigation and selected files
+
     current_drive: str = "C_Drive"
     selected_file: str = ""
     file_content: str = ""
-    
-    # Calculator state
+
     calc_input: str = ""
     calc_result: str = "0"
-    
-    # Terminal logs (Linux Lite 7.4 Bash style)
-    terminal_logs: list[str] = [
-        "Welcome to Linux Lite 7.4 LTS (GNU/Linux 6.8.0-generic x86_64)",
-        " * Documentation:  https://www.linuxliteos.com/forums/",
-        " * Support:        https://www.linuxliteos.com/helpmanual/",
-        "",
-        "Type 'help' to see simulated commands.",
-        "user@linuxlite-7:~$ "
-    ]
-    
-    # Text Editor state
-    notepad_text: str = "Welcome to EduOS! Double-click on any desktop icon to open the corresponding application. Feel free to explore."
 
-    # App/Process Lifecycle Management
+    terminal_logs: list[str] = [
+        "Welcome to EduOS v2 (CasaOS Edition)",
+        "Type 'help' to see available commands.",
+        "user@eduos:~$ ",
+    ]
+
+    notepad_text: str = "EduOS — running inside CasaOS.\nClick any desktop icon to open an app."
+
+    start_menu_open: bool = False
+
+    # ── Process Lifecycle ──────────────────────────────────────────────────────
     def open_app(self, name: str):
         self.system_status = "loading"
-        self.status_message = f"Launching {name}..."
-        
-        # If already open, bring to front
-        for window in self.active_windows:
-            if window["title"] == name:
-                self.active_windows.remove(window)
-                self.active_windows.append(window)
-                self.system_status = "nominal"
-                self.status_message = f"Focused {name}"
-                return
-        
-        # Register process PID
-        pid = self.next_pid
-        self.processes[name] = pid
-        self.next_pid += 1
-        
-        # Add to active windows
-        self.active_windows.append({
-            "title": name,
-            "minimized": False,
-            "maximized": False,
-        })
-        
+        if name not in [w["title"] for w in self.active_windows]:
+            pid = self.next_pid
+            self.next_pid += 1
+            self.active_windows.append({"title": name, "minimized": False, "z": len(self.active_windows) + 10})
+            self.processes[name] = pid
         self.system_status = "nominal"
-        self.status_message = f"Started {name} (PID: {pid})"
+        self.status_message = f"Launched {name} (PID {self.processes.get(name, '?')})"
 
     def close_app(self, name: str):
-        self.system_status = "loading"
-        self.status_message = f"Terminating {name}..."
-        
-        # Clean up window
         self.active_windows = [w for w in self.active_windows if w["title"] != name]
-        
-        # Clean up process
-        if name in self.processes:
-            del self.processes[name]
-            
-        self.system_status = "nominal"
-        self.status_message = f"Terminated {name} process."
+        self.processes.pop(name, None)
+        self.status_message = f"Closed {name}"
 
-    def kill_process(self, name: str):
-        self.close_app(name)
+    def toggle_start_menu(self):
+        self.start_menu_open = not self.start_menu_open
 
-    # Notepad explicit setter
-    def set_notepad_text(self, text: str):
-        self.notepad_text = text
+    def close_start_menu(self):
+        self.start_menu_open = False
 
-    # File Explorer
+    # ── File Explorer ──────────────────────────────────────────────────────────
     def select_drive(self, drive: str):
-        self.system_status = "loading"
         self.current_drive = drive
-        self.selected_file = ""
-        self.file_content = ""
-        self.system_status = "nominal"
 
-    def read_file(self, filename: str):
-        self.system_status = "loading"
+    def select_file(self, filename: str):
         self.selected_file = filename
-        if filename == "edu_os_specs.md":
-            self.file_content = "# EduOS System Specifications\n- Kernel: Custom Reflex OSState\n- Architecture: Web-Native\n- UI Framework: Radix UI / Tailwind CSS\n- Project Directory: /KE/SPM"
-        elif filename == "notes.txt":
-            self.file_content = "This is a simple text note. You can edit notes inside the Notepad app!"
-        elif filename == "config.json":
-            self.file_content = '{\n  "version": "1.0.0",\n  "theme": "glassmorphism-dark",\n  "dev_mode": true\n}'
-        elif filename == "kernel.sys":
-            self.file_content = "[BINARY DATA: 0x4A6B9C2D3E4F]"
-        else:
-            self.file_content = f"Contents of {filename} (Read-Only Mode)"
-        self.system_status = "nominal"
+        self.file_content = f"[Simulated content of {filename}]\nThis file lives on {self.current_drive}.\nIn a full deployment, real files from /app/data appear here."
 
-    # Calculator
-    def calc_press(self, key: str):
-        if key == "C":
-            self.calc_input = ""
-            self.calc_result = "0"
-        elif key == "=":
-            self.system_status = "loading"
+    # ── Calculator ────────────────────────────────────────────────────────────
+    def calc_press(self, value: str):
+        if value == "=":
             try:
-                allowed_chars = "0123456789+-*/. "
-                if all(c in allowed_chars for c in self.calc_input):
-                    self.calc_result = str(eval(self.calc_input))
-                else:
-                    self.calc_result = "Error"
-                    self.system_status = "error"
+                self.calc_result = str(eval(self.calc_input))
             except Exception:
                 self.calc_result = "Error"
-                self.system_status = "error"
-            self.calc_input = self.calc_result
-            if self.system_status != "error":
-                self.system_status = "nominal"
+            self.calc_input = ""
+        elif value == "C":
+            self.calc_input = ""
+            self.calc_result = "0"
         else:
-            if self.calc_input == "0" or self.calc_result == "Error":
-                self.calc_input = key
-            else:
-                self.calc_input += key
+            self.calc_input += value
 
-    # Terminal command handler (Linux Lite 7.4 Bash style)
-    def execute_terminal_cmd(self, form_data: dict):
-        cmd = form_data.get("terminal_input", "").strip()
-        if not cmd:
-            return
-        
-        self.system_status = "loading"
-        self.terminal_logs.append(f"user@linuxlite-7:~$ {cmd}")
-        cmd_parts = cmd.split()
-        base_cmd = cmd_parts[0].lower()
-        
-        if base_cmd == "help":
-            self.terminal_logs.extend([
-                "Linux Lite 7.4 Shell Simulator. Available commands:",
-                "  help       - Show this message",
-                "  ls         - List files in virtual current directory",
-                "  cat [file] - Display contents of a virtual file",
-                "  clear      - Clear terminal window logs",
-                "  neofetch   - Display system logo and specifications",
-                "  ps         - List running simulation processes",
-                "  kill [PID] - Terminate a process by its PID ID"
-            ])
-        elif base_cmd == "clear":
-            self.terminal_logs = ["user@linuxlite-7:~$ "]
-            self.system_status = "nominal"
-            return
-        elif base_cmd == "ls":
-            self.terminal_logs.append("C_Drive/  D_Drive/")
-        elif base_cmd == "ps":
-            self.terminal_logs.append("  PID TTY          TIME CMD")
-            for name, pid in self.processes.items():
-                self.terminal_logs.append(f" {pid} pts/0    00:00:00 {name.lower().replace(' ', '_')}")
-        elif base_cmd == "kill":
-            if len(cmd_parts) > 1:
-                try:
-                    pid_to_kill = int(cmd_parts[1])
-                    found = False
-                    for name, pid in list(self.processes.items()):
-                        if pid == pid_to_kill:
-                            self.close_app(name)
-                            self.terminal_logs.append(f"Process {pid_to_kill} ({name}) terminated.")
-                            found = True
-                            break
-                    if not found:
-                        self.terminal_logs.append(f"kill: ({pid_to_kill}) - No such process")
-                except ValueError:
-                    self.terminal_logs.append("kill: invalid PID operand")
-            else:
-                self.terminal_logs.append("kill: missing PID operand")
-        elif base_cmd == "neofetch":
-            # Cool Linux Lite ascii feather logo
-            self.terminal_logs.extend([
-                "   .---.        user@linuxlite-7",
-                "  /     \\       ----------------",
-                "  \\  (o) /      OS: Linux Lite 7.4 LTS x86_64",
-                "   '---'        Host: Virtual reflex Machine",
-                "  /     \\       Kernel: 6.8.0-generic",
-                " |   |   |      Uptime: 45 mins",
-                " |   |   |      Shell: bash 5.2.15",
-                "  \\     /       Resolution: 1920x1080",
-                "   `---`        DE: XFCE 4.18",
-                "                WM: Xfwm4",
-                "                Terminal: xfce4-terminal",
-                "                CPU: AMD Ryzen 9 virtual (4) @ 3.40GHz",
-                "                Memory: 1240MiB / 4096MiB"
-            ])
-        elif base_cmd == "cat":
-            if len(cmd_parts) > 1:
-                filename = cmd_parts[1]
-                found = False
-                for drive, files in self.file_system.items():
-                    if filename in files:
-                        found = True
-                        if filename == "edu_os_specs.md":
-                            self.terminal_logs.append("Kernel: Custom Reflex OSState")
-                        elif filename == "notes.txt":
-                            self.terminal_logs.append("This is a simple text note.")
-                        else:
-                            self.terminal_logs.append(f"[Binary/Text Mock Content of {filename}]")
-                if not found:
-                    self.terminal_logs.append(f"cat: {filename}: No such file or directory")
-            else:
-                self.terminal_logs.append("cat: missing file operand")
+    # ── Terminal ──────────────────────────────────────────────────────────────
+    terminal_input: str = ""
+
+    def set_terminal_input(self, val: str):
+        self.terminal_input = val
+
+    def run_command(self):
+        cmd = self.terminal_input.strip()
+        self.terminal_logs.append(f"user@eduos:~$ {cmd}")
+        if cmd == "help":
+            self.terminal_logs += ["  ls, pwd, whoami, clear, date, uname -a"]
+        elif cmd == "ls":
+            self.terminal_logs.append("  Documents  Downloads  Study_Materials  notes.txt")
+        elif cmd == "pwd":
+            self.terminal_logs.append("  /app/data")
+        elif cmd == "whoami":
+            self.terminal_logs.append("  edu_user")
+        elif cmd == "clear":
+            self.terminal_logs = ["user@eduos:~$ "]
+        elif cmd == "date":
+            self.terminal_logs.append("  Thu Jul  3 2026")
+        elif cmd.startswith("uname"):
+            self.terminal_logs.append("  Linux eduos-casaos 6.x x86_64 GNU/Linux")
+        elif cmd == "":
+            pass
         else:
-            self.terminal_logs.append(f"bash: {base_cmd}: command not found")
-            
-        self.terminal_logs.append("user@linuxlite-7:~$ ")
-        self.system_status = "nominal"
+            self.terminal_logs.append(f"  bash: {cmd}: command not found")
+        self.terminal_logs.append("user@eduos:~$ ")
+        self.terminal_input = ""
+
+    # ── Notepad ───────────────────────────────────────────────────────────────
+    def set_notepad_text(self, val: str):
+        self.notepad_text = val
 
 
-# ------------------- UI COMPONENTS -------------------
+# ── Styles ────────────────────────────────────────────────────────────────────
+DESKTOP_STYLE = {
+    "width": "100vw",
+    "height": "100vh",
+    "background": "linear-gradient(135deg, #0f0c29, #302b63, #24243e)",
+    "position": "relative",
+    "overflow": "hidden",
+    "font_family": "'Inter', sans-serif",
+}
 
-def desktop_icon(name: str, icon_tag: str) -> rx.Component:
-    """Renders a desktop icon bound to state drivers."""
-    return rx.button(
-        rx.vstack(
-            rx.icon(
-                tag=icon_tag,
-                size=32,
-                color="rgba(255, 255, 255, 0.95)",
-                style={"filter": "drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3))"}
-            ),
-            rx.text(
-                name,
-                color="white",
-                font_size="xs",
-                font_weight="medium",
-                style={"text-shadow": "0 2px 4px rgba(0,0,0,0.8)"}
-            ),
-            spacing="1",
-            align="center",
+WINDOW_STYLE = {
+    "position": "absolute",
+    "top": "80px",
+    "left": "120px",
+    "min_width": "480px",
+    "min_height": "320px",
+    "background": "rgba(15,15,30,0.85)",
+    "backdrop_filter": "blur(20px)",
+    "border": "1px solid rgba(255,255,255,0.12)",
+    "border_radius": "12px",
+    "box_shadow": "0 24px 64px rgba(0,0,0,0.7)",
+    "z_index": "20",
+    "overflow": "hidden",
+}
+
+HEADER_STYLE = {
+    "background": "rgba(255,255,255,0.06)",
+    "padding": "10px 16px",
+    "display": "flex",
+    "align_items": "center",
+    "justify_content": "space-between",
+    "cursor": "move",
+    "border_bottom": "1px solid rgba(255,255,255,0.08)",
+    "class_name": "window-header",
+}
+
+ICON_STYLE = {
+    "display": "flex",
+    "flex_direction": "column",
+    "align_items": "center",
+    "gap": "6px",
+    "cursor": "pointer",
+    "padding": "12px",
+    "border_radius": "10px",
+    "color": "white",
+    "font_size": "12px",
+    "_hover": {"background": "rgba(255,255,255,0.1)"},
+}
+
+TASKBAR_STYLE = {
+    "position": "fixed",
+    "bottom": "0",
+    "left": "0",
+    "right": "0",
+    "height": "48px",
+    "background": "rgba(10,10,20,0.92)",
+    "backdrop_filter": "blur(20px)",
+    "border_top": "1px solid rgba(255,255,255,0.1)",
+    "display": "flex",
+    "align_items": "center",
+    "padding": "0 16px",
+    "gap": "8px",
+    "z_index": "100",
+}
+
+DESKTOP_APPS = [
+    ("folder", "File Explorer"),
+    ("calculator", "Calculator"),
+    ("terminal", "Terminal"),
+    ("file-text", "Notepad"),
+    ("activity", "System Monitor"),
+]
+
+
+# ── Window contents ───────────────────────────────────────────────────────────
+def file_explorer_content():
+    return rx.vstack(
+        rx.hstack(
+            rx.button("C: Drive", on_click=OSState.select_drive("C_Drive"),
+                      color_scheme="violet", size="1"),
+            rx.button("D: Drive", on_click=OSState.select_drive("D_Drive"),
+                      color_scheme="violet", size="1"),
         ),
-        on_click=OSState.open_app(name),
-        background="transparent",
-        _hover={"background": "rgba(255, 255, 255, 0.15)", "transform": "scale(1.05)"},
-        border_radius="md",
-        padding="3",
-        width="20",
-        height="20",
-        transition="all 0.2s ease",
-    )
-
-
-def render_explorer() -> rx.Component:
-    """Renders the file explorer inside a window."""
-    return rx.grid(
-        # Drive Selector (Left Pane)
+        rx.divider(color="rgba(255,255,255,0.1)"),
         rx.vstack(
-            rx.text("Drives", font_size="sm", font_weight="bold", color="gray.300", padding_left="2"),
-            rx.button(
-                rx.hstack(rx.icon(tag="database", size=16), rx.text("C: Drive", font_size="sm")),
-                width="full",
-                variant="ghost",
-                on_click=OSState.select_drive("C_Drive"),
-                color=rx.cond(OSState.current_drive == "C_Drive", "white", "gray.400"),
-                background=rx.cond(OSState.current_drive == "C_Drive", "rgba(255, 255, 255, 0.08)", "transparent"),
-            ),
-            rx.button(
-                rx.hstack(rx.icon(tag="database", size=16), rx.text("D: Drive", font_size="sm")),
-                width="full",
-                variant="ghost",
-                on_click=OSState.select_drive("D_Drive"),
-                color=rx.cond(OSState.current_drive == "D_Drive", "white", "gray.400"),
-                background=rx.cond(OSState.current_drive == "D_Drive", "rgba(255, 255, 255, 0.08)", "transparent"),
-            ),
-            border_right="1px solid rgba(255, 255, 255, 0.1)",
-            padding="2",
-            spacing="2",
-            height="full",
-            align_items="start",
-        ),
-        
-        # Files List (Middle Pane)
-        rx.vstack(
-            rx.text("Files", font_size="sm", font_weight="bold", color="gray.300", padding_left="2"),
-            rx.vstack(
-                rx.foreach(
-                    OSState.file_system[OSState.current_drive],
-                    lambda file: rx.button(
-                        rx.hstack(rx.icon(tag="file", size=16), rx.text(file, font_size="sm")),
-                        width="full",
-                        variant="ghost",
-                        color=rx.cond(OSState.selected_file == file, "white", "gray.300"),
-                        background=rx.cond(OSState.selected_file == file, "rgba(255, 255, 255, 0.08)", "transparent"),
-                        on_click=OSState.read_file(file),
-                    )
-                ),
-                width="full",
-                spacing="1",
-            ),
-            padding="2",
-            spacing="2",
-            height="full",
-            align_items="start",
-        ),
-        
-        # File Content Viewer (Right Pane)
-        rx.vstack(
-            rx.text("File Preview", font_size="sm", font_weight="bold", color="gray.300"),
-            rx.cond(
-                OSState.selected_file,
-                rx.vstack(
-                    rx.text(OSState.selected_file, font_size="xs", color="teal.300", font_weight="semibold"),
-                    rx.scroll_area(
-                        rx.text(
-                            OSState.file_content,
-                            font_size="xs",
-                            font_family="monospace",
-                            color="gray.200",
-                            white_space="pre-wrap",
-                        ),
-                        height="200px",
-                        width="full",
-                    ),
+            rx.foreach(
+                OSState.file_system[OSState.current_drive],
+                lambda f: rx.hstack(
+                    rx.icon(tag="file", size=14, color="#a78bfa"),
+                    rx.text(f, color="white", font_size="13px",
+                            cursor="pointer",
+                            on_click=OSState.select_file(f)),
                     spacing="2",
-                    align_items="start",
-                    width="full",
-                ),
-                rx.text("Select a file to preview its contents.", font_size="xs", color="gray.500")
+                )
             ),
-            padding="2",
-            spacing="2",
-            height="full",
-            align_items="start",
+            align="start", spacing="1",
         ),
-        columns="3",
-        spacing="2",
-        width="full",
-        height="300px",
+        rx.cond(
+            OSState.selected_file != "",
+            rx.box(
+                rx.text(OSState.file_content, color="#94a3b8",
+                        font_size="12px", white_space="pre-wrap"),
+                background="rgba(0,0,0,0.3)", padding="10px",
+                border_radius="6px", margin_top="8px",
+            )
+        ),
+        align="start", padding="16px", spacing="3", width="100%",
     )
 
 
-def render_calculator() -> rx.Component:
-    """Renders the simple calculator app."""
+def calculator_content():
     buttons = [
         ["7", "8", "9", "/"],
         ["4", "5", "6", "*"],
         ["1", "2", "3", "-"],
-        ["C", "0", "=", "+"]
+        ["0", ".", "=", "+"],
+        ["C"],
     ]
-    
-    rows_components = []
-    for row in buttons:
-        row_components = []
-        for btn in row:
-            if btn == "=":
-                bg = "rgba(20, 110, 190, 0.6)"
-            elif btn == "C":
-                bg = "rgba(240, 80, 80, 0.6)"
-            elif btn in ["+", "-", "*", "/"]:
-                bg = "rgba(255, 255, 255, 0.2)"
-            else:
-                bg = "rgba(255, 255, 255, 0.12)"
-                
-            row_components.append(
-                rx.button(
-                    btn,
-                    on_click=OSState.calc_press(btn),
-                    color="white",
-                    background=bg,
-                    _hover={"background": "rgba(255, 255, 255, 0.25)"},
-                    width="full",
-                    height="12",
-                    font_size="md",
-                    font_weight="semibold",
-                )
-            )
-        rows_components.append(rx.hstack(*row_components, width="full", spacing="2"))
-        
     return rx.vstack(
         rx.box(
-            rx.text(
-                OSState.calc_input,
-                font_size="lg",
-                color="gray.400",
-                text_align="right",
-                height="6",
-                overflow="hidden"
-            ),
-            rx.text(
-                OSState.calc_result,
-                font_size="2xl",
-                color="white",
-                font_weight="bold",
-                text_align="right"
-            ),
-            width="full",
-            background="rgba(0,0,0,0.3)",
-            padding="3",
-            border_radius="md",
-            border="1px solid rgba(255, 255, 255, 0.1)",
+            rx.text(OSState.calc_input, color="#94a3b8", font_size="13px",
+                    text_align="right"),
+            rx.text(OSState.calc_result, color="white", font_size="28px",
+                    font_weight="700", text_align="right"),
+            background="rgba(0,0,0,0.3)", padding="12px",
+            border_radius="8px", width="100%",
         ),
         rx.vstack(
-            *rows_components,
-            width="full",
+            *[
+                rx.hstack(
+                    *[
+                        rx.button(
+                            btn,
+                            on_click=OSState.calc_press(btn),
+                            width="60px", height="44px",
+                            color_scheme="violet" if btn in ["=", "C"] else "gray",
+                            size="2",
+                        )
+                        for btn in row
+                    ],
+                    spacing="2",
+                )
+                for row in buttons
+            ],
             spacing="2",
         ),
-        width="280px",
-        spacing="3",
-        align="stretch",
+        align="center", padding="16px", spacing="3",
     )
 
 
-def render_terminal() -> rx.Component:
-    """Renders the interactive command-line terminal."""
+def terminal_content():
     return rx.vstack(
-        rx.scroll_area(
-            rx.vstack(
-                rx.foreach(
-                    OSState.terminal_logs,
-                    lambda log: rx.text(
-                        log,
-                        color="green.300",
-                        font_family="monospace",
-                        font_size="xs",
-                        white_space="pre-wrap"
-                    )
-                ),
-                align_items="start",
-                spacing="1",
+        rx.box(
+            rx.foreach(
+                OSState.terminal_logs,
+                lambda line: rx.text(line, color="#4ade80",
+                                     font_family="monospace", font_size="13px"),
             ),
-            height="220px",
-            width="full",
-            background="black",
-            border_radius="md",
-            padding="3",
-            border="1px solid rgba(255, 255, 255, 0.15)",
+            background="rgba(0,0,0,0.5)", padding="12px",
+            border_radius="6px", height="200px", overflow_y="auto",
+            width="100%",
         ),
-        rx.form(
-            rx.hstack(
-                rx.text("user@linuxlite-7:~$", color="green.300", font_family="monospace", font_size="xs", align_self="center"),
-                rx.input(
-                    id="terminal_input",
-                    placeholder="Type help...",
-                    color="white",
-                    background="transparent",
-                    border="none",
-                    _focus={"border": "none", "outline": "none"},
-                    font_family="monospace",
-                    font_size="xs",
-                    width="full",
-                ),
-                rx.button("Execute", type="submit", size="1", color_scheme="teal", variant="solid"),
-                width="full",
-                spacing="2",
+        rx.hstack(
+            rx.text("$ ", color="#4ade80", font_family="monospace"),
+            rx.input(
+                value=OSState.terminal_input,
+                on_change=OSState.set_terminal_input,
+                on_key_down=lambda k: OSState.run_command() if k == "Enter" else None,
+                placeholder="type a command...",
+                background="transparent",
+                border="none",
+                color="#4ade80",
+                font_family="monospace",
+                width="100%",
+                _focus={"outline": "none"},
             ),
-            on_submit=OSState.execute_terminal_cmd,
-            reset_on_submit=True,
-            width="full",
+            width="100%",
         ),
-        width="full",
-        spacing="2",
+        align="start", padding="16px", spacing="3", width="100%",
     )
 
 
-def render_notepad() -> rx.Component:
-    """Renders notepad app."""
+def notepad_content():
     return rx.vstack(
         rx.text_area(
             value=OSState.notepad_text,
             on_change=OSState.set_notepad_text,
-            width="full",
-            height="220px",
-            background="rgba(255,255,255,0.05)",
+            height="240px",
+            width="100%",
+            background="rgba(0,0,0,0.3)",
             color="white",
             border="1px solid rgba(255,255,255,0.1)",
-            _focus={"border": "1px solid rgba(0, 150, 255, 0.5)"},
-            font_size="sm",
+            border_radius="6px",
+            padding="10px",
+            font_family="monospace",
+            font_size="13px",
+            resize="none",
         ),
-        rx.text(
-            f"Character count: {OSState.notepad_text.length()}",
-            font_size="xs",
-            color="gray.400",
-            align_self="end"
-        ),
-        width="450px",
-        spacing="2",
+        align="start", padding="16px", width="100%",
     )
 
 
-def render_system_monitor() -> rx.Component:
-    """Renders the simulated System Monitor application."""
+def sysmon_content():
     return rx.vstack(
-        rx.text("Active Processes", font_size="sm", font_weight="bold", color="teal.300"),
-        rx.table.root(
-            rx.table.header(
-                rx.table.row(
-                    rx.table.column_header_cell("PID"),
-                    rx.table.column_header_cell("Process Name"),
-                    rx.table.column_header_cell("Status"),
-                    rx.table.column_header_cell("Action"),
-                )
-            ),
-            rx.table.body(
-                rx.foreach(
-                    OSState.processes,
-                    lambda proc: rx.table.row(
-                        rx.table.cell(proc[1].to_string()),
-                        rx.table.cell(proc[0]),
-                        rx.table.cell(
-                            rx.badge(
-                                "Running",
-                                color_scheme="green",
-                                variant="soft",
-                            )
-                        ),
-                        rx.table.cell(
-                            rx.button(
-                                "Kill",
-                                on_click=OSState.kill_process(proc[0]),
-                                size="1",
-                                color_scheme="red",
-                                variant="solid",
-                            )
-                        ),
-                    )
-                )
-            ),
-            width="full",
-        ),
-        width="450px",
-        spacing="3",
-    )
-
-
-def render_window(title: str) -> rx.Component:
-    """Renders a styled, draggable window frame with specific application contents."""
-    # Determine which sub-view to inject inside the window body
-    content = rx.cond(
-        title == "File Explorer",
-        render_explorer(),
-        rx.cond(
-            title == "Calculator",
-            render_calculator(),
-            rx.cond(
-                title == "Terminal",
-                render_terminal(),
-                rx.cond(
-                    title == "Notepad",
-                    render_notepad(),
-                    rx.cond(
-                        title == "System Monitor",
-                        render_system_monitor(),
-                        rx.text(f"Welcome to {title}!", color="white")
-                    )
-                )
+        rx.text("Active Processes", color="#a78bfa", font_weight="600"),
+        rx.foreach(
+            OSState.active_windows,
+            lambda w: rx.hstack(
+                rx.icon(tag="cpu", size=14, color="#4ade80"),
+                rx.text(w["title"], color="white", font_size="13px"),
+                rx.text(f"PID: {OSState.processes.get(w['title'], '?')}",
+                        color="#94a3b8", font_size="12px"),
+                spacing="2",
             )
-        )
-    )
-
-    return Draggable.create(
-        rx.box(
-            # Window Header (Drag Handle)
-            rx.hstack(
-                rx.hstack(
-                    rx.icon(
-                        tag=rx.cond(
-                            title == "Terminal",
-                            "terminal",
-                            rx.cond(
-                                title == "File Explorer",
-                                "folder",
-                                rx.cond(
-                                    title == "Calculator",
-                                    "calculator",
-                                    rx.cond(
-                                        title == "System Monitor",
-                                        "activity",
-                                        "file-text"
-                                    )
-                                )
-                            )
-                        ),
-                        size=14,
-                        color="gray.300"
-                    ),
-                    rx.text(
-                        title,
-                        color="white",
-                        font_size="sm",
-                        font_weight="bold",
-                    ),
-                    spacing="2",
-                    align="center",
-                ),
-                # Window Action Buttons
-                rx.hstack(
-                    rx.button(
-                        rx.icon(tag="minus", size=12),
-                        variant="ghost",
-                        size="1",
-                        color="gray.400",
-                        _hover={"color": "white", "background": "rgba(255,255,255,0.1)"},
-                    ),
-                    rx.button(
-                        rx.icon(tag="square", size=10),
-                        variant="ghost",
-                        size="1",
-                        color="gray.400",
-                        _hover={"color": "white", "background": "rgba(255,255,255,0.1)"},
-                    ),
-                    rx.button(
-                        rx.icon(tag="x", size=14),
-                        on_click=OSState.close_app(title),
-                        color="gray.400",
-                        variant="ghost",
-                        size="1",
-                        _hover={"color": "white", "background": "rgba(240, 80, 80, 0.8)"},
-                    ),
-                    spacing="1",
-                ),
-                class_name="window-header",
-                width="full",
-                padding_x="3",
-                padding_y="2",
-                justify="between",
-                background="rgba(15, 23, 42, 0.85)",
-                border_top_left_radius="12px",
-                border_top_right_radius="12px",
-                border_bottom="1px solid rgba(255, 255, 255, 0.1)",
-                style={"cursor": "move", "user-select": "none"},
-            ),
-            
-            # Window Body
-            rx.box(
-                content,
-                padding="4",
-                background="rgba(15, 23, 42, 0.65)",
-                backdrop_filter="blur(16px)",
-                border_bottom_left_radius="12px",
-                border_bottom_right_radius="12px",
-            ),
-            style={
-                "width": "fit-content",
-                "box-shadow": "0 20px 50px rgba(0, 0, 0, 0.5)",
-                "border": "1px solid rgba(255, 255, 255, 0.15)",
-                "border-radius": "12px",
-                "z-index": "50",
-                "pointer-events": "auto",  # Re-enable events inside individual windows
-            },
         ),
+        rx.divider(color="rgba(255,255,255,0.1)"),
+        rx.text(f"Status: {OSState.system_status}",
+                color=rx.cond(OSState.system_status == "nominal", "#4ade80", "#f87171"),
+                font_size="13px"),
+        rx.text(OSState.status_message, color="#94a3b8", font_size="12px"),
+        align="start", padding="16px", spacing="2",
     )
 
 
-def system_status_indicator() -> rx.Component:
-    """Renders a reactive status indicator showing the health of the system state."""
-    color = rx.cond(
-        OSState.system_status == "loading",
-        "orange",
-        rx.cond(
-            OSState.system_status == "error",
-            "red",
-            "emerald"
-        )
-    )
-    
-    glow_color = rx.cond(
-        OSState.system_status == "loading",
-        "rgba(245, 158, 11, 0.5)",
-        rx.cond(
-            OSState.system_status == "error",
-            "rgba(239, 68, 68, 0.5)",
-            "rgba(16, 185, 129, 0.5)"
-        )
-    )
-    
-    return rx.hstack(
-        rx.box(
-            width="3",
-            height="3",
-            border_radius="full",
-            background=f"{color}.400",
-            style={
-                "box-shadow": f"0 0 10px {glow_color}",
-                "transition": "all 0.3s ease",
-            },
-        ),
-        rx.text(
-            OSState.status_message,
-            color="gray.300",
-            font_size="xs",
-            font_family="monospace"
-        ),
-        spacing="2",
-        align="center",
-    )
+def window_body(title: str):
+    return rx.cond(title == "File Explorer", file_explorer_content(),
+           rx.cond(title == "Calculator",    calculator_content(),
+           rx.cond(title == "Terminal",      terminal_content(),
+           rx.cond(title == "Notepad",       notepad_content(),
+                                             sysmon_content()))))
 
 
-def taskbar() -> rx.Component:
-    """Renders the desktop bottom taskbar containing open windows."""
+def render_window(window: dict):
     return rx.box(
         rx.hstack(
-            # Start button
-            rx.button(
-                rx.hstack(
-                    rx.icon(tag="layers", size=16),
-                    rx.text("EduOS", font_size="xs", font_weight="semibold"),
-                    spacing="2",
-                ),
-                color="white",
-                background="rgba(255, 255, 255, 0.15)",
-                _hover={"background": "rgba(255, 255, 255, 0.25)"},
-                border_radius="md",
-                size="2",
-            ),
-            
-            # Active tasks indicator
             rx.hstack(
-                rx.foreach(
-                    OSState.active_windows,
-                    lambda w: rx.button(
-                        rx.hstack(
-                            rx.box(
-                                width="2",
-                                height="2",
-                                border_radius="full",
-                                background="teal.400"
-                            ),
-                            rx.text(w["title"], font_size="xs", font_weight="medium"),
-                            spacing="2",
-                            align="center",
-                        ),
-                        variant="solid",
-                        background="rgba(255, 255, 255, 0.1)",
-                        _hover={"background": "rgba(255, 255, 255, 0.2)"},
-                        color="white",
-                        size="2",
-                    )
-                ),
+                rx.icon(tag="monitor", size=14, color="#a78bfa"),
+                rx.text(window["title"], color="white",
+                        font_size="13px", font_weight="600"),
                 spacing="2",
             ),
-            
-            # System Clock and indicators (right-aligned)
-            rx.hstack(
-                system_status_indicator(),
-                rx.icon(tag="wifi", size=14, color="white"),
-                rx.icon(tag="volume-2", size=14, color="white"),
-                rx.text("14:24", color="white", font_size="xs", font_weight="bold"),
-                spacing="3",
-                align="center",
+            rx.button(
+                rx.icon(tag="x", size=12),
+                on_click=OSState.close_app(window["title"]),
+                size="1", color_scheme="ruby",
+                border_radius="50%", width="20px", height="20px",
             ),
-            justify="between",
-            align="center",
-            width="full",
-            padding_x="4",
-            padding_y="2",
+            justify="between", width="100%",
+            **{k: v for k, v in HEADER_STYLE.items() if k != "class_name"},
+            class_name="window-header",
         ),
-        position="fixed",
-        bottom="0",
-        left="0",
-        right="0",
-        height="12",
-        background="rgba(15, 23, 42, 0.75)",
-        backdrop_filter="blur(20px)",
-        border_top="1px solid rgba(255, 255, 255, 0.1)",
-        z_index="100",
+        window_body(window["title"]),
+        **WINDOW_STYLE,
     )
 
 
-def index() -> rx.Component:
-    """The main desktop view."""
+# ── Taskbar ───────────────────────────────────────────────────────────────────
+def taskbar():
     return rx.box(
-        # Grid of Desktop Icons (Top Left)
-        rx.vstack(
-            desktop_icon("File Explorer", "folder"),
-            desktop_icon("Calculator", "calculator"),
-            desktop_icon("Terminal", "terminal"),
-            desktop_icon("Notepad", "file-text"),
-            desktop_icon("System Monitor", "activity"),
-            position="absolute",
-            top="6",
-            left="6",
-            spacing="4",
-            z_index="10",  # Keep icons above desktop background but below overlays
+        # Start button
+        rx.button(
+            rx.icon(tag="grid-2x2", size=16),
+            rx.text("EduOS", font_weight="700", font_size="13px"),
+            on_click=OSState.toggle_start_menu,
+            background="linear-gradient(135deg,#7c3aed,#4f46e5)",
+            color="white",
+            border="none",
+            border_radius="8px",
+            padding="0 14px",
+            height="32px",
+            cursor="pointer",
+            spacing="2",
+            display="flex",
+            align_items="center",
+            gap="6px",
         ),
-        
-        # Render all active app windows
+        # Divider
+        rx.divider(orientation="vertical", height="28px",
+                   color="rgba(255,255,255,0.15)"),
+        # Open windows chips
+        rx.foreach(
+            OSState.active_windows,
+            lambda w: rx.box(
+                rx.text(w["title"], color="white", font_size="12px"),
+                background="rgba(255,255,255,0.08)",
+                border="1px solid rgba(255,255,255,0.12)",
+                border_radius="6px",
+                padding="4px 12px",
+                cursor="pointer",
+            )
+        ),
+        # Clock spacer
+        rx.spacer(),
+        rx.text("EduOS on CasaOS", color="#94a3b8", font_size="11px"),
+        **TASKBAR_STYLE,
+    )
+
+
+# ── Start Menu ────────────────────────────────────────────────────────────────
+STUDY_SUBJECTS = {
+    "Mathematics": ["Algebra", "Calculus", "Statistics"],
+    "Science": ["Physics", "Chemistry", "Biology"],
+    "Technology": ["Programming", "Networks", "AI/ML"],
+    "Languages": ["English Grammar", "Essay Writing"],
+}
+
+def start_menu():
+    return rx.cond(
+        OSState.start_menu_open,
         rx.box(
-            rx.foreach(
-                OSState.active_windows,
-                lambda w: render_window(w["title"])
+            rx.vstack(
+                rx.text("Study Materials", color="white",
+                        font_weight="700", font_size="15px",
+                        border_bottom="1px solid rgba(255,255,255,0.1)",
+                        padding_bottom="8px", width="100%"),
+                *[
+                    rx.vstack(
+                        rx.text(subject, color="#a78bfa",
+                                font_size="12px", font_weight="600"),
+                        *[rx.text(f"  • {item}", color="#cbd5e1",
+                                  font_size="12px", cursor="pointer",
+                                  _hover={"color": "white"})
+                          for item in items],
+                        align="start", spacing="1",
+                    )
+                    for subject, items in STUDY_SUBJECTS.items()
+                ],
+                align="start", spacing="3", width="100%",
             ),
-            position="absolute",
-            top="0",
-            left="0",
-            width="full",
-            height="full",
-            pointer_events="none",  # Allow clicks to pass through empty window container space
-            z_index="20",
+            position="fixed",
+            bottom="52px",
+            left="16px",
+            width="220px",
+            background="rgba(15,15,30,0.95)",
+            backdrop_filter="blur(20px)",
+            border="1px solid rgba(255,255,255,0.12)",
+            border_radius="12px",
+            padding="16px",
+            z_index="200",
         ),
-        
-        # Bottom Taskbar
+    )
+
+
+# ── Desktop Icons ─────────────────────────────────────────────────────────────
+def desktop_icons():
+    return rx.vstack(
+        *[
+            rx.box(
+                rx.vstack(
+                    rx.icon(tag=icon, size=32, color="#a78bfa"),
+                    rx.text(label, color="white", font_size="11px",
+                            text_align="center"),
+                    spacing="1", align="center",
+                ),
+                on_click=OSState.open_app(label),
+                **ICON_STYLE,
+            )
+            for icon, label in DESKTOP_APPS
+        ],
+        position="absolute",
+        top="24px",
+        left="24px",
+        spacing="2",
+    )
+
+
+# ── Index page ────────────────────────────────────────────────────────────────
+def index():
+    return rx.box(
+        # Background
+        rx.box(
+            position="absolute", top="0", left="0",
+            right="0", bottom="0",
+            background="radial-gradient(ellipse at 20% 50%, rgba(124,58,237,0.15) 0%, transparent 60%), "
+                       "radial-gradient(ellipse at 80% 20%, rgba(79,70,229,0.1) 0%, transparent 50%)",
+            pointer_events="none",
+        ),
+        # Desktop icons
+        desktop_icons(),
+        # Open windows
+        rx.foreach(OSState.active_windows, render_window),
+        # Start menu
+        start_menu(),
+        # Taskbar
         taskbar(),
-        
-        # Beautiful gradient background wallpaper
-        style={
-            "background": "radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), "
-                          "radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), "
-                          "radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%), "
-                          "radial-gradient(at 0% 100%, hsla(339,49%,30%,1) 0, transparent 50%), "
-                          "radial-gradient(at 100% 100%, hsla(256,40%,25%,1) 0, transparent 50%)",
-            "background-color": "hsla(253,16%,7%,1)",
-            "width": "100vw",
-            "height": "100vh",
-            "overflow": "hidden",
-            "position": "relative",
-            "z-index": "1",
-        },
+        **DESKTOP_STYLE,
     )
 
 
 app = rx.App(
-    theme=rx.theme(
-        appearance="dark",
-        has_background=True,
-        accent_color="teal",
-    )
+    stylesheets=["https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"],
 )
-app.add_page(index, title="EduOS - Linux Lite Virtual Learning OS")
+app.add_page(index, title="EduOS — CasaOS Edition")
