@@ -1,20 +1,40 @@
 name: Build & Push EduOS to GHCR
 
+# ─────────────────────────────────────────────────────────────────────────────
+# MULTI-SERVICE ARCHITECTURE
+#
+#   This workflow manages the EduOS custom image only.
+#   The Webtop service (lscr.io/linuxserver/webtop) is a pre-built upstream
+#   image — it does NOT need to be built here. CasaOS / docker compose pulls
+#   it directly from LinuxServer's registry on first run.
+#
+#   Service         Image source          Built here?
+#   ──────────────  ────────────────────  ───────────
+#   eduos           ghcr.io/p7266473-max  YES ✓
+#   webtop          lscr.io/linuxserver   NO  (upstream)
+# ─────────────────────────────────────────────────────────────────────────────
+
 on:
   push:
     branches: [main]
-  workflow_dispatch:   # allow manual trigger from GitHub Actions UI
+    paths:                              # only rebuild when app code changes
+      - "edu_os/**"
+      - "Dockerfile"
+      - "requirements.txt"
+      - "rxconfig.py"
+  workflow_dispatch:                   # allow manual trigger from GitHub UI
 
 env:
-  REGISTRY: ghcr.io
+  REGISTRY:   ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/edu_os
 
 jobs:
   build-and-push:
+    name: Build EduOS image → GHCR
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write   # needed to push to GHCR
+      packages: write                  # push to GHCR
 
     steps:
       - name: Checkout repository
@@ -25,7 +45,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}   # auto-provided, no setup needed
+          password: ${{ secrets.GITHUB_TOKEN }}  # auto-provided, no setup needed
 
       - name: Extract Docker metadata (tags & labels)
         id: meta
@@ -35,16 +55,34 @@ jobs:
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=sha-
+          labels: |
+            org.opencontainers.image.title=EduOS
+            org.opencontainers.image.description=Educational OS desktop powered by Reflex + CasaOS
+            org.opencontainers.image.vendor=p7266473-max
 
-      - name: Set up Docker Buildx (for multi-platform & layer caching)
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push Docker image
+      - name: Build and push EduOS image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha        # GitHub Actions cache (free)
+          tags:       ${{ steps.meta.outputs.tags }}
+          labels:     ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
           cache-to:   type=gha,mode=max
+
+      - name: Summary
+        run: |
+          echo "## ✅ EduOS deployed to GHCR" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Image | Port |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| EduOS (Reflex) | \`ghcr.io/${{ env.IMAGE_NAME }}:latest\` | 3000 |" >> $GITHUB_STEP_SUMMARY
+          echo "| Webtop (XFCE)  | \`lscr.io/linuxserver/webtop:ubuntu-xfce\` | 3001 |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Pull both services on your CasaOS host:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "docker compose pull && docker compose up -d" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

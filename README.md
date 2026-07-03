@@ -1,63 +1,91 @@
-# EduOS — CasaOS Edition
+# EduOS — CasaOS Master Interface
 
-A glassmorphic educational desktop OS built with **Reflex (Python)** and managed as a **CasaOS Custom App**.
+A glassmorphic educational OS built with **Reflex (Python)** and managed as a multi-service **CasaOS** stack.
 
 ---
 
 ## Architecture
 
 ```
-CasaOS Dashboard (host layer)
-    └── EduOS Custom App (Docker container)
-            ├── Reflex Frontend  → port 3000  (Next.js)
-            └── Reflex Backend   → port 8000  (FastAPI)
+CasaOS Dashboard  ←  Master Interface / host management layer
+    │
+    ├── eduos_app      (port 3000)  — Reflex Educational UI
+    │       └── ghcr.io/p7266473-max/edu_os:latest
+    │
+    └── eduos_webtop   (port 3001)  — Ubuntu XFCE Virtual Desktop
+            └── lscr.io/linuxserver/webtop:ubuntu-xfce
+
+Shared Volume: ~/casaos/eduos/study_materials
+    ↕ visible in both containers simultaneously
 ```
 
-## Quick Start (Self-Hosted)
+---
 
-### Option A — Run directly with Docker Compose
+## Quick Start
+
 ```bash
 # 1. Create persistent data folders
 mkdir -p ~/casaos/eduos/study_materials ~/casaos/eduos/notes
 
-# 2. Pull and run
+# 2. Pull & start both services
+docker compose pull
 docker compose up -d
 
-# 3. Open browser → http://localhost:3000
+# 3. Open in browser
+#    EduOS UI      → http://localhost:3000
+#    Linux Desktop → http://localhost:3001  (user: edu_user / pass: eduos2024)
 ```
 
-### Option B — Install via CasaOS Custom App
-1. Open **CasaOS Dashboard → App Store → Custom Install**
-2. Click **Import** and paste the contents of `docker-compose.yml`
-3. Click **Install**
-4. Click the **EduOS** tile — it opens on port **3000**
+### Install via CasaOS Custom App
+1. **CasaOS Dashboard → App Store → Custom Install → Import**
+2. Paste `docker-compose.yml` → **Install**
+3. Two tiles appear: **EduOS** and **EduOS Desktop**
 
 ---
 
-## Persistent Study Data
+## Services
 
-| Local path (on your machine)             | Inside container              | Purpose                        |
-|------------------------------------------|-------------------------------|-------------------------------|
-| `~/casaos/eduos/study_materials/`        | `/app/data/study_materials/`  | PDFs, course modules, slides  |
-| `~/casaos/eduos/notes/`                  | `/app/data/notes/`            | Notepad files                 |
-
-Upload files via **CasaOS Files app** → they instantly appear inside the Reflex app.
+| Service | Image | Port | Purpose |
+|---------|-------|------|---------|
+| EduOS (Reflex) | `ghcr.io/p7266473-max/edu_os:latest` | 3000 | Educational desktop UI |
+| Webtop (XFCE) | `lscr.io/linuxserver/webtop:ubuntu-xfce` | 3001 | Full Linux virtual desktop |
 
 ---
 
-## CI/CD — GitHub Container Registry
+## Persistent Storage
 
-Every `git push` to `main` triggers `.github/workflows/build-push.yml` which:
-1. Builds the Docker image
-2. Pushes it to `ghcr.io/p7266473-max/edu_os:latest` (free, no credit card)
+| Host path | Container path | Used by |
+|-----------|---------------|---------|
+| `~/casaos/eduos/study_materials/` | `/app/data/study_materials` (EduOS) | Reflex app |
+| `~/casaos/eduos/study_materials/` | `/config/Desktop/study_materials` (Webtop) | Linux desktop |
+| `~/casaos/eduos/notes/` | `/app/data/notes` | EduOS Notepad |
 
-CasaOS will pull the new image on next container restart.
+Upload files via **CasaOS Files** → instantly available in both services.
+
+---
+
+## CI/CD — GitHub Actions → GHCR
+
+Every `git push` to `main` (when app code changes) triggers the workflow:
+
+```
+push to main → GitHub Actions → docker build → ghcr.io/p7266473-max/edu_os:latest
+                                                          ↓
+                                              CasaOS: docker compose pull && up -d
+```
+
+Webtop is a **pre-built upstream image** — no build step needed.
 
 ---
 
 ## Local Development
+
 ```bash
 pip install -r requirements.txt
 reflex run
-# open http://localhost:3000
+# → http://localhost:3000
 ```
+
+## Change Webtop Password
+
+Edit `docker-compose.yml` → `webtop` → `PASSWORD=your_new_password` → `docker compose up -d webtop`

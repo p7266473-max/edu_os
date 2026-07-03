@@ -1,39 +1,42 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# EduOS — CasaOS Custom App (docker-compose.yml)
+# ═════════════════════════════════════════════════════════════════════════════
+# EduOS Master Interface — Multi-Service Stack
+# Managed by CasaOS Dashboard
 #
-# HOW TO USE IN CASAOS:
-#   1. Open CasaOS Dashboard → App Store → Custom Install
-#   2. Click "Import" and paste the contents of this file
-#   3. Hit Install — CasaOS handles the rest
+# SERVICES:
+#   ┌─────────────────────────────────────────────────────────────┐
+#   │  CasaOS Dashboard (Master Interface / host layer)           │
+#   │    ├── eduos      → port 3000  — Reflex Educational UI      │
+#   │    └── webtop     → port 3001  — Linux Desktop (XFCE/KasmVNC)│
+#   └─────────────────────────────────────────────────────────────┘
 #
-# PERSISTENT STORAGE:
-#   • ~/casaos/eduos/study_materials  ← upload PDFs/course files here via
-#                                        the CasaOS Files app; your Reflex app
-#                                        reads them from /app/data/study_materials
-#   • ~/casaos/eduos/notes            ← notepad & user-created text files
-# ─────────────────────────────────────────────────────────────────────────────
+# HOW TO INSTALL IN CASAOS:
+#   1. CasaOS Dashboard → App Store → Custom Install → Import
+#   2. Paste this entire file → Install
+#   3. Both tiles appear on your CasaOS dashboard
+#
+# SHARED STORAGE:
+#   ~/casaos/eduos/study_materials  →  visible in BOTH containers
+#   ~/casaos/eduos/notes            →  EduOS notepad persistence
+# ═════════════════════════════════════════════════════════════════════════════
 
 version: "3.8"
 
 name: eduos
 
 services:
-  eduos:
-    # Pull pre-built image from GitHub Container Registry
-    # (built automatically by .github/workflows/build-push.yml)
-    image: ghcr.io/p7266473-max/edu_os:latest
 
+  # ── Service 1: EduOS (Reflex — Python Educational Interface) ─────────────
+  eduos:
+    image: ghcr.io/p7266473-max/edu_os:latest
     container_name: eduos_app
     restart: unless-stopped
+    pull_policy: always                 # always pull latest on restart
 
     ports:
-      - "3000:3000"    # Reflex frontend (Next.js) — open this in browser
-      - "8000:8000"    # Reflex backend  (FastAPI) — internal API
+      - "3000:3000"    # Reflex frontend  — http://<host>:3000
+      - "8000:8000"    # Reflex backend   — internal FastAPI
 
     volumes:
-      # ── Persistent study data ──────────────────────────────────────────────
-      # Files uploaded via CasaOS File Manager appear inside the container at
-      # /app/data so your Python logic can read/list them directly.
       - type: bind
         source: ${CASAOS_DATA_DIR:-~/casaos/eduos}/study_materials
         target: /app/data/study_materials
@@ -42,13 +45,11 @@ services:
         source: ${CASAOS_DATA_DIR:-~/casaos/eduos}/notes
         target: /app/data/notes
 
-      # ── Reflex .web cache (speeds up restarts) ─────────────────────────────
-      - eduos_web_cache:/app/.web
+      - eduos_web_cache:/app/.web       # Next.js build cache
 
     environment:
       - PYTHONUNBUFFERED=1
       - REFLEX_ENV=prod
-      # Data path exposed to Python logic
       - STUDY_MATERIALS_PATH=/app/data/study_materials
       - NOTES_PATH=/app/data/notes
 
@@ -60,9 +61,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s   # give Reflex time to build frontend on first run
+      start_period: 60s
 
-    # ── CasaOS UI metadata ────────────────────────────────────────────────────
     labels:
       casaos.name:        "EduOS"
       casaos.description: "Educational OS desktop — powered by Reflex + CasaOS"
@@ -71,10 +71,86 @@ services:
       casaos.port.map:    "3000:3000"
       casaos.category:    "Education"
 
+
+  # ── Service 2: Webtop (LinuxServer — Ubuntu XFCE Virtual Desktop) ────────
+  #
+  # Provides a full Linux desktop in the browser via KasmVNC.
+  # Acts as the 'Backend Engine' for interactive coding, file management,
+  # and system tasks — all accessible from within the CasaOS dashboard.
+  #
+  # Access: http://<host>:3001
+  # Default credentials: set via CUSTOM_USER / PASSWORD env vars below
+  # ─────────────────────────────────────────────────────────────────────────
+  webtop:
+    image: lscr.io/linuxserver/webtop:ubuntu-xfce
+    container_name: eduos_webtop
+    restart: unless-stopped
+
+    security_opt:
+      - seccomp:unconfined              # required for desktop apps to run
+
+    shm_size: "1gb"                    # shared memory for browser rendering
+
+    ports:
+      - "3001:3000"    # KasmVNC web desktop  — http://<host>:3001
+
+    volumes:
+      # Webtop home/config (fully persistent across restarts)
+      - webtop_config:/config
+
+      # ── Shared data bridge ────────────────────────────────────────────────
+      # Files placed in ~/casaos/eduos/study_materials via CasaOS Files app
+      # are mounted on the Webtop Desktop so you can open, edit, and manage
+      # them directly inside the virtual Linux desktop.
+      - type: bind
+        source: ${CASAOS_DATA_DIR:-~/casaos/eduos}/study_materials
+        target: /config/Desktop/study_materials
+
+      - type: bind
+        source: ${CASAOS_DATA_DIR:-~/casaos/eduos}/notes
+        target: /config/Desktop/notes
+
+    environment:
+      - PUID=1000                      # run as non-root user
+      - PGID=1000
+      - TZ=${TZ:-UTC}                  # set your timezone e.g. Africa/Lagos
+      - CUSTOM_USER=edu_user           # web login username
+      - PASSWORD=eduos2024             # web login password — CHANGE THIS
+      - SUBFOLDER=/                    # URL subfolder (/ = root)
+      - TITLE=EduOS Desktop            # browser tab title
+
+    networks:
+      - eduos_net
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    labels:
+      casaos.name:        "EduOS Desktop"
+      casaos.description: "Ubuntu XFCE virtual desktop — backend workspace for EduOS"
+      casaos.icon:        "https://cdn-icons-png.flaticon.com/512/888/888879.png"
+      casaos.index:       "/"
+      casaos.port.map:    "3001:3000"
+      casaos.category:    "Utilities"
+
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
 volumes:
   eduos_web_cache:
     driver: local
 
+  webtop_config:          # persistent home directory for the Linux desktop
+    driver: local
+
+
+# ── Networks ──────────────────────────────────────────────────────────────────
 networks:
   eduos_net:
     driver: bridge
+    # Both services share this network so they can communicate internally:
+    #   http://eduos_app:3000   — EduOS Reflex UI
+    #   http://eduos_webtop:3000 — Webtop (internal)
