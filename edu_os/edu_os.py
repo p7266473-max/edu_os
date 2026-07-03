@@ -7,6 +7,10 @@ class Draggable(rx.Component):
     tag = "Draggable"
     handle: rx.Var[str] = ".window-header"
 
+    @classmethod
+    def create(cls, *children, **props):
+        return super().create(*children, **props)
+
 class OSState(rx.State):
     # Active windows list: list of dicts with title, minimized, maximized
     active_windows: list[dict] = []
@@ -448,7 +452,7 @@ def render_window(title: str) -> rx.Component:
         )
     )
 
-    return Draggable(
+    return Draggable.create(
         rx.box(
             # Window Header (Drag Handle)
             rx.hstack(
