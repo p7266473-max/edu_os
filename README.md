@@ -1,22 +1,24 @@
 # EduOS — CasaOS Master Interface
 
-A glassmorphic educational OS built with **Reflex (Python)** and managed as a multi-service **CasaOS** stack.
+A glassmorphic educational OS built with **Reflex (Python)**, unified with an **Ubuntu XFCE virtual desktop**, managed as a professional multi-service **CasaOS** stack.
 
 ---
 
 ## Architecture
 
 ```
-CasaOS Dashboard  ←  Master Interface / host management layer
+CasaOS Dashboard  ←  Master Interface
     │
-    ├── eduos_app      (port 3000)  — Reflex Educational UI
-    │       └── ghcr.io/p7266473-max/edu_os:latest
+    ├── eduos_app    (port 3000)  ─── Reflex Educational UI
+    │       image: ghcr.io/p7266473-max/edu_os:latest
+    │       api:   http://eduos_app:8000  (internal)
     │
-    └── eduos_webtop   (port 3001)  — Ubuntu XFCE Virtual Desktop
-            └── lscr.io/linuxserver/webtop:ubuntu-xfce
+    └── eduos_webtop (port 3001)  ─── Ubuntu XFCE Virtual Desktop
+            image: lscr.io/linuxserver/webtop:ubuntu-xfce
+            knows EduOS at: $EDUOS_API / $EDUOS_FRONTEND
 
-Shared Volume: ~/casaos/eduos/study_materials
-    ↕ visible in both containers simultaneously
+Internal network: eduos_net
+Shared volume:    ~/casaos/eduos/study_materials  (visible in BOTH services)
 ```
 
 ---
@@ -24,57 +26,87 @@ Shared Volume: ~/casaos/eduos/study_materials
 ## Quick Start
 
 ```bash
-# 1. Create persistent data folders
+# 1. Create data folders
 mkdir -p ~/casaos/eduos/study_materials ~/casaos/eduos/notes
 
-# 2. Pull & start both services
+# 2. Configure environment (optional)
+cp .env.example .env
+nano .env   # set TZ, PASSWORD, etc.
+
+# 3. Pull and start
 docker compose pull
 docker compose up -d
 
-# 3. Open in browser
-#    EduOS UI      → http://localhost:3000
-#    Linux Desktop → http://localhost:3001  (user: edu_user / pass: eduos2024)
+# EduOS UI      → http://localhost:3000
+# Linux Desktop → http://localhost:3001  (edu_user / eduos2024)
 ```
-
-### Install via CasaOS Custom App
-1. **CasaOS Dashboard → App Store → Custom Install → Import**
-2. Paste `docker-compose.yml` → **Install**
-3. Two tiles appear: **EduOS** and **EduOS Desktop**
 
 ---
 
-## Services
+## CasaOS Custom Install (Step-by-Step)
 
-| Service | Image | Port | Purpose |
-|---------|-------|------|---------|
-| EduOS (Reflex) | `ghcr.io/p7266473-max/edu_os:latest` | 3000 | Educational desktop UI |
-| Webtop (XFCE) | `lscr.io/linuxserver/webtop:ubuntu-xfce` | 3001 | Full Linux virtual desktop |
+> Do this once — both services become permanent clickable icons on your dashboard.
+
+1. Open **CasaOS Dashboard**
+2. Click **App Store** (grid icon, top right)
+3. Click **⊕ Custom Install** (top right of App Store)
+4. Click **Import** and paste the contents of `docker-compose.yml`
+5. Click **Install**
+6. ✅ Two tiles appear on your dashboard:
+   - **EduOS** — click → opens Reflex UI on port 3000
+   - **EduOS Desktop** — click → opens Ubuntu XFCE on port 3001
+
+To update after a `git push`:
+```bash
+docker compose pull eduos && docker compose up -d eduos
+# Webtop stays live — it is not rebuilt by CI
+```
+
+---
+
+## Cross-Service Communication
+
+The Webtop container has these environment variables pre-set so you can interact with the EduOS backend **from inside the Linux desktop terminal**:
+
+```bash
+# Open a terminal in the Webtop desktop and run:
+
+# Query EduOS kernel state (JSON)
+curl $EDUOS_API/api/state | python3 -m json.tool
+
+# Open EduOS UI in the desktop browser
+xdg-open $EDUOS_FRONTEND
+
+# List study materials
+ls /config/Desktop/study_materials/
+```
 
 ---
 
 ## Persistent Storage
 
-| Host path | Container path | Used by |
-|-----------|---------------|---------|
-| `~/casaos/eduos/study_materials/` | `/app/data/study_materials` (EduOS) | Reflex app |
-| `~/casaos/eduos/study_materials/` | `/config/Desktop/study_materials` (Webtop) | Linux desktop |
-| `~/casaos/eduos/notes/` | `/app/data/notes` | EduOS Notepad |
+| Host path | EduOS path | Webtop path | Purpose |
+|-----------|-----------|------------|---------|
+| `~/casaos/eduos/study_materials/` | `/app/data/study_materials` | `/config/Desktop/study_materials` | PDFs, course files |
+| `~/casaos/eduos/notes/` | `/app/data/notes` | `/config/Desktop/notes` | Notepad files |
+| *(Docker volume)* | `/app/.web` | — | Reflex build cache |
+| *(Docker volume)* | — | `/config` | Webtop home dir |
 
-Upload files via **CasaOS Files** → instantly available in both services.
+Upload via **CasaOS Files** → instantly available in both services.
 
 ---
 
 ## CI/CD — GitHub Actions → GHCR
 
-Every `git push` to `main` (when app code changes) triggers the workflow:
-
 ```
-push to main → GitHub Actions → docker build → ghcr.io/p7266473-max/edu_os:latest
-                                                          ↓
-                                              CasaOS: docker compose pull && up -d
+git push main
+    → GitHub Actions (.github/workflows/build-push.yml)
+        → docker build
+        → push ghcr.io/p7266473-max/edu_os:latest
+            → docker compose pull eduos && up -d   (on your host)
 ```
 
-Webtop is a **pre-built upstream image** — no build step needed.
+**Webtop is never rebuilt** — it's a pre-built LinuxServer image pulled directly.
 
 ---
 
@@ -85,7 +117,3 @@ pip install -r requirements.txt
 reflex run
 # → http://localhost:3000
 ```
-
-## Change Webtop Password
-
-Edit `docker-compose.yml` → `webtop` → `PASSWORD=your_new_password` → `docker compose up -d webtop`
