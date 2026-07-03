@@ -161,6 +161,20 @@ services:
       casaos.scheme:      "http"
 
 
+  nginx_proxy:
+    image: 'jc21/nginx-proxy-manager:latest'
+    container_name: nginx_proxy
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '81:81'
+      - '443:443'
+    volumes:
+      - ${CASAOS_DATA_DIR:-~/casaos/eduos}/npm_data:/data
+      - ${CASAOS_DATA_DIR:-~/casaos/eduos}/npm_letsencrypt:/etc/letsencrypt
+    networks:
+      - eduos_net
+
 # ── Volumes ───────────────────────────────────────────────────────────────────
 volumes:
   eduos_web_cache:
