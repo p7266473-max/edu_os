@@ -5,6 +5,7 @@ from typing import List, Dict, Any
 class Draggable(rx.Component):
     library = "react-draggable"
     tag = "Draggable"
+    is_default = True
     handle: rx.Var[str] = ".window-header"
 
     @classmethod
