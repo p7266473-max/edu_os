@@ -93,6 +93,10 @@ class OSState(rx.State):
     def set_terminal_input(self, val: str):
         self.terminal_input = val
 
+    def handle_terminal_key(self, key: str):
+        if key == "Enter":
+            self.run_command()
+
     def run_command(self):
         cmd = self.terminal_input.strip()
         self.terminal_logs.append(f"user@eduos:~$ {cmd}")
@@ -289,7 +293,7 @@ def terminal_content():
             rx.input(
                 value=OSState.terminal_input,
                 on_change=OSState.set_terminal_input,
-                on_key_down=lambda k: OSState.run_command() if k == "Enter" else None,
+                on_key_down=OSState.handle_terminal_key,
                 placeholder="type a command...",
                 background="transparent",
                 border="none",
