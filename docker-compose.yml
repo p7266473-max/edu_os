@@ -120,8 +120,8 @@ services:
       - PUID=1000
       - PGID=1000
       - TZ=${TZ:-UTC}
-      - CUSTOM_USER=${WEBTOP_USER:-edu_user}
-      - PASSWORD=${WEBTOP_PASSWORD:-eduos2024}
+      - CUSTOM_USER=
+      - PASSWORD=
       - SUBFOLDER=/
       - TITLE=EduOS Desktop
       # ── Cross-service URLs (talk to EduOS from inside the desktop) ────────
