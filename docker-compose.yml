@@ -1,0 +1,80 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# EduOS — CasaOS Custom App (docker-compose.yml)
+#
+# HOW TO USE IN CASAOS:
+#   1. Open CasaOS Dashboard → App Store → Custom Install
+#   2. Click "Import" and paste the contents of this file
+#   3. Hit Install — CasaOS handles the rest
+#
+# PERSISTENT STORAGE:
+#   • ~/casaos/eduos/study_materials  ← upload PDFs/course files here via
+#                                        the CasaOS Files app; your Reflex app
+#                                        reads them from /app/data/study_materials
+#   • ~/casaos/eduos/notes            ← notepad & user-created text files
+# ─────────────────────────────────────────────────────────────────────────────
+
+version: "3.8"
+
+name: eduos
+
+services:
+  eduos:
+    # Pull pre-built image from GitHub Container Registry
+    # (built automatically by .github/workflows/build-push.yml)
+    image: ghcr.io/p7266473-max/edu_os:latest
+
+    container_name: eduos_app
+    restart: unless-stopped
+
+    ports:
+      - "3000:3000"    # Reflex frontend (Next.js) — open this in browser
+      - "8000:8000"    # Reflex backend  (FastAPI) — internal API
+
+    volumes:
+      # ── Persistent study data ──────────────────────────────────────────────
+      # Files uploaded via CasaOS File Manager appear inside the container at
+      # /app/data so your Python logic can read/list them directly.
+      - type: bind
+        source: ${CASAOS_DATA_DIR:-~/casaos/eduos}/study_materials
+        target: /app/data/study_materials
+
+      - type: bind
+        source: ${CASAOS_DATA_DIR:-~/casaos/eduos}/notes
+        target: /app/data/notes
+
+      # ── Reflex .web cache (speeds up restarts) ─────────────────────────────
+      - eduos_web_cache:/app/.web
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REFLEX_ENV=prod
+      # Data path exposed to Python logic
+      - STUDY_MATERIALS_PATH=/app/data/study_materials
+      - NOTES_PATH=/app/data/notes
+
+    networks:
+      - eduos_net
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s   # give Reflex time to build frontend on first run
+
+    # ── CasaOS UI metadata ────────────────────────────────────────────────────
+    labels:
+      casaos.name:        "EduOS"
+      casaos.description: "Educational OS desktop — powered by Reflex + CasaOS"
+      casaos.icon:        "https://cdn-icons-png.flaticon.com/512/2436/2436874.png"
+      casaos.index:       "/"
+      casaos.port.map:    "3000:3000"
+      casaos.category:    "Education"
+
+volumes:
+  eduos_web_cache:
+    driver: local
+
+networks:
+  eduos_net:
+    driver: bridge
