@@ -26,6 +26,18 @@ class SubjectState(rx.State):
     def set_hypervisor_type(self, value: str):
         self.week1_hypervisor_type = value
 
+    def set_iso_size(self, val: list[float]):
+        self.week2_iso_size = float(val[0])
+
+    def set_usb_speed(self, val: list[int]):
+        self.week2_usb_speed = int(val[0])
+
+    def set_solar_panels(self, val: list[int]):
+        self.week3_solar_panels = int(val[0])
+
+    def set_water_flow(self, val: list[int]):
+        self.week3_water_flow = int(val[0])
+
     @rx.var
     def week1_simulation_result(self) -> str:
         if "Type 1" in self.week1_hypervisor_type:
@@ -214,7 +226,7 @@ def render_mis_it():
                     max=32.0,
                     step=0.1,
                     value=SubjectState.week2_iso_size,
-                    on_change=SubjectState.set_value("week2_iso_size"),
+                    on_change=SubjectState.set_iso_size,
                 ),
                 rx.text(SubjectState.week2_iso_size.to_string() + " GB"),
                 rx.text("USB Write Speed (MB/s):"),
@@ -223,7 +235,7 @@ def render_mis_it():
                     max=150,
                     step=5,
                     value=SubjectState.week2_usb_speed,
-                    on_change=SubjectState.set_value("week2_usb_speed"),
+                    on_change=SubjectState.set_usb_speed,
                 ),
                 rx.text(SubjectState.week2_usb_speed.to_string() + " MB/s"),
                 rx.hstack(
@@ -255,7 +267,7 @@ def render_mis_it():
                             max=10000,
                             step=100,
                             value=SubjectState.week3_solar_panels,
-                            on_change=SubjectState.set_value("week3_solar_panels"),
+                            on_change=SubjectState.set_solar_panels,
                         ),
                         rx.text(SubjectState.week3_solar_panels.to_string()),
                         align="start",
@@ -267,7 +279,7 @@ def render_mis_it():
                             max=50000,
                             step=1000,
                             value=SubjectState.week3_water_flow,
-                            on_change=SubjectState.set_value("week3_water_flow"),
+                            on_change=SubjectState.set_water_flow,
                         ),
                         rx.text(SubjectState.week3_water_flow.to_string()),
                         align="start",
