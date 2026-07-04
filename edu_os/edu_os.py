@@ -1,490 +1,388 @@
 import reflex as rx
 
-
-class OSState(rx.State):
-    # ── Core state ────────────────────────────────────────────────────────────
-    active_windows: list[str] = []          # list of app titles (strings, not dicts)
-    processes: dict[str, int] = {}
-    next_pid: int = 1010
-    system_status: str = "nominal"
-    status_message: str = "EduOS v2 — CasaOS Edition"
-
-    # ── File system ───────────────────────────────────────────────────────────
-    c_drive_files: list[str] = ["System32", "Users", "Program_Files", "kernel.sys", "config.json"]
-    d_drive_files: list[str] = ["Documents", "Downloads", "Study_Materials", "notes.txt"]
-    current_drive: str = "C_Drive"
-    selected_file: str = ""
-    file_content: str = ""
-
-    # ── Calculator ────────────────────────────────────────────────────────────
-    calc_input: str = ""
-    calc_result: str = "0"
-
-    # ── Terminal ──────────────────────────────────────────────────────────────
-    terminal_logs: list[str] = [
-        "Welcome to EduOS v2 (CasaOS Edition)",
-        "Type 'help' to see available commands.",
-        "user@eduos:~$ ",
-    ]
-    terminal_input: str = ""
-
-    # ── Notepad ───────────────────────────────────────────────────────────────
-    notepad_text: str = "EduOS — running inside CasaOS.\nClick any desktop icon to open an app."
-
-    # ── Start menu ────────────────────────────────────────────────────────────
-    start_menu_open: bool = False
-
-    # ── Computed vars (safe Var access) ───────────────────────────────────────
-    @rx.var
-    def current_files(self) -> list[str]:
-        if self.current_drive == "D_Drive":
-            return self.d_drive_files
-        return self.c_drive_files
+class SubjectState(rx.State):
+    current_tab: str = "MIS/IT"
+    
+    # Week selector for MIS/IT
+    mis_active_week: str = "Week 1: Virtualization"
+    
+    # Hypervisor performance simulation type
+    week1_hypervisor_type: str = "Type 1: Bare-Metal"
+    
+    # Week 2 sliders
+    week2_iso_size: float = 3.2
+    week2_usb_speed: int = 20
+    
+    # Week 3 scenario inputs
+    week3_solar_panels: int = 2500
+    week3_water_flow: int = 8500
+    
+    def set_tab(self, tab_name: str):
+        self.current_tab = tab_name
+        
+    def set_mis_week(self, week_name: str):
+        self.mis_active_week = week_name
+        
+    def set_hypervisor_type(self, value: str):
+        self.week1_hypervisor_type = value
 
     @rx.var
-    def is_nominal(self) -> bool:
-        return self.system_status == "nominal"
+    def week1_simulation_result(self) -> str:
+        if "Type 1" in self.week1_hypervisor_type:
+            return "⚡ Type 1 Hypervisor: 98-99% direct hardware access efficiency. Recommended for production datacenters (Proxmox VE, ESXi)."
+        return "💻 Type 2 Hypervisor: 85-95% efficiency due to host OS abstraction. Recommended for localized learning (VirtualBox, VMware Workstation)."
 
-    # ── Process lifecycle ─────────────────────────────────────────────────────
-    def open_app(self, name: str):
-        self.system_status = "loading"
-        if name not in self.active_windows:
-            pid = self.next_pid
-            self.next_pid += 1
-            self.active_windows.append(name)
-            self.processes[name] = pid
-        self.system_status = "nominal"
-        self.status_message = f"Launched: {name}"
+    @rx.var
+    def week2_flash_duration(self) -> str:
+        est_time_seconds = (self.week2_iso_size * 1024) / max(self.week2_usb_speed, 1)
+        minutes = int(est_time_seconds // 60)
+        seconds = int(est_time_seconds % 60)
+        return f"{minutes}m {seconds}s"
 
-    def close_app(self, name: str):
-        self.active_windows = [w for w in self.active_windows if w != name]
-        if name in self.processes:
-            del self.processes[name]
-        self.status_message = f"Closed: {name}"
+    @rx.var
+    def week3_power_available(self) -> str:
+        power = self.week3_solar_panels * 60.0
+        return f"{power:,.1f} W (60% estimated efficiency)"
 
-    def toggle_start_menu(self):
-        self.start_menu_open = not self.start_menu_open
-
-    # ── File Explorer ─────────────────────────────────────────────────────────
-    def select_drive(self, drive: str):
-        self.current_drive = drive
-        self.selected_file = ""
-        self.file_content = ""
-
-    def select_file(self, filename: str):
-        self.selected_file = filename
-        self.file_content = (
-            f"[Simulated content of {filename}]\n"
-            f"Drive: {self.current_drive}\n"
-            "In production, real files from /app/data appear here."
-        )
-
-    # ── Calculator ────────────────────────────────────────────────────────────
-    def calc_press(self, value: str):
-        if value == "=":
-            try:
-                self.calc_result = str(eval(self.calc_input))
-            except Exception:
-                self.calc_result = "Error"
-            self.calc_input = ""
-        elif value == "C":
-            self.calc_input = ""
-            self.calc_result = "0"
-        else:
-            self.calc_input += value
-
-    # ── Terminal ──────────────────────────────────────────────────────────────
-    def set_terminal_input(self, val: str):
-        self.terminal_input = val
-
-    def handle_terminal_key(self, key: str):
-        if key == "Enter":
-            self.run_terminal_command()
-
-    def run_terminal_command(self):
-        cmd = self.terminal_input.strip()
-        self.terminal_logs.append(f"user@eduos:~$ {cmd}")
-        if cmd == "help":
-            self.terminal_logs += ["  ls, pwd, whoami, clear, date, uname -a"]
-        elif cmd == "ls":
-            self.terminal_logs.append("  Documents  Downloads  Study_Materials  notes.txt")
-        elif cmd == "pwd":
-            self.terminal_logs.append("  /app/data")
-        elif cmd == "whoami":
-            self.terminal_logs.append("  edu_user")
-        elif cmd == "clear":
-            self.terminal_logs = ["user@eduos:~$ "]
-        elif cmd == "date":
-            self.terminal_logs.append("  Thu Jul  3 2026")
-        elif cmd.startswith("uname"):
-            self.terminal_logs.append("  Linux eduos-casaos 6.x x86_64 GNU/Linux")
-        elif cmd == "":
-            pass
-        else:
-            self.terminal_logs.append(f"  bash: {cmd}: command not found")
-        self.terminal_logs.append("user@eduos:~$ ")
-        self.terminal_input = ""
-
-    # ── Notepad ───────────────────────────────────────────────────────────────
-    def set_notepad_text(self, val: str):
-        self.notepad_text = val
+    @rx.var
+    def week3_water_capacity(self) -> str:
+        capacity = int(self.week3_water_flow / 3.0)
+        return f"{capacity:,} survivors supported/day"
 
 
-# ── Shared styles ─────────────────────────────────────────────────────────────
-DESKTOP_BG = {
-    "width": "100vw",
-    "height": "100vh",
-    "background": "linear-gradient(135deg,#0f0c29,#302b63,#24243e)",
-    "position": "relative",
-    "overflow": "hidden",
-    "font_family": "'Inter',sans-serif",
-}
-
-WIN_STYLE = {
-    "position": "absolute",
-    "top": "70px",
-    "left": "110px",
-    "min_width": "460px",
-    "background": "rgba(15,15,30,0.88)",
-    "backdrop_filter": "blur(20px)",
-    "border": "1px solid rgba(255,255,255,0.12)",
-    "border_radius": "12px",
-    "box_shadow": "0 24px 60px rgba(0,0,0,0.7)",
-    "overflow": "hidden",
-    "z_index": "20",
-}
-
-HDR_STYLE = {
-    "background": "rgba(255,255,255,0.06)",
-    "padding": "10px 16px",
-    "border_bottom": "1px solid rgba(255,255,255,0.08)",
-    "display": "flex",
-    "align_items": "center",
-    "justify_content": "space-between",
-    "cursor": "move",
-}
-
-ICO_STYLE = {
-    "display": "flex",
-    "flex_direction": "column",
-    "align_items": "center",
-    "gap": "6px",
+# Styles
+NAV_BTN_STYLE = {
+    "padding": "12px 24px",
+    "font_weight": "600",
+    "border_radius": "8px",
     "cursor": "pointer",
-    "padding": "12px",
-    "border_radius": "10px",
-    "color": "white",
-    "font_size": "12px",
-    "_hover": {"background": "rgba(255,255,255,0.1)"},
+    "transition": "all 0.2s ease-in-out",
 }
 
-TASKBAR = {
-    "position": "fixed",
-    "bottom": "0", "left": "0", "right": "0",
-    "height": "48px",
-    "background": "rgba(10,10,20,0.92)",
-    "backdrop_filter": "blur(20px)",
-    "border_top": "1px solid rgba(255,255,255,0.1)",
-    "display": "flex",
-    "align_items": "center",
-    "padding": "0 16px",
-    "gap": "8px",
-    "z_index": "100",
-}
-
-APPS = [
-    ("folder", "File Explorer"),
-    ("calculator", "Calculator"),
-    ("terminal", "Terminal"),
-    ("file-text", "Notepad"),
-    ("activity", "System Monitor"),
-]
-
-SUBJECTS = {
-    "Mathematics": ["Algebra", "Calculus", "Statistics"],
-    "Science":     ["Physics", "Chemistry", "Biology"],
-    "Technology":  ["Programming", "Networks", "AI / ML"],
-    "Languages":   ["English Grammar", "Essay Writing"],
+CONTENT_CONTAINER = {
+    "background_color": "#ffffff",
+    "border_radius": "12px",
+    "padding": "24px",
+    "box_shadow": "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)",
+    "width": "100%",
 }
 
 
-# ── Window bodies ─────────────────────────────────────────────────────────────
-def file_explorer_body():
-    return rx.vstack(
-        rx.hstack(
-            rx.button("C: Drive", on_click=OSState.select_drive("C_Drive"),
-                      color_scheme="violet", size="1"),
-            rx.button("D: Drive", on_click=OSState.select_drive("D_Drive"),
-                      color_scheme="violet", size="1"),
-        ),
-        rx.divider(color="rgba(255,255,255,0.1)"),
-        rx.vstack(
-            rx.foreach(
-                OSState.current_files,
-                lambda f: rx.hstack(
-                    rx.icon(tag="file", size=14, color="#a78bfa"),
-                    rx.text(f, color="white", font_size="13px",
-                            cursor="pointer", on_click=OSState.select_file(f)),
-                    spacing="2",
-                )
-            ),
-            align="start", spacing="1",
-        ),
-        rx.cond(
-            OSState.selected_file != "",
-            rx.box(
-                rx.text(OSState.file_content, color="#94a3b8",
-                        font_size="12px", white_space="pre-wrap"),
-                background="rgba(0,0,0,0.35)", padding="10px",
-                border_radius="6px", margin_top="6px",
-            )
-        ),
-        align="start", padding="16px", spacing="3", width="100%",
+def syllabus_tab_button(name: str):
+    is_active = (SubjectState.current_tab == name)
+    return rx.button(
+        name,
+        on_click=lambda: SubjectState.set_tab(name),
+        background_color=rx.cond(is_active, "#1e3a8a", "transparent"),
+        color=rx.cond(is_active, "#ffffff", "#475569"),
+        border=rx.cond(is_active, "1px solid #1e3a8a", "1px solid #cbd5e1"),
+        _hover={"background_color": rx.cond(is_active, "#1e3a8a", "#f1f5f9")},
+        style=NAV_BTN_STYLE,
     )
 
 
-def calculator_body():
-    rows = [
-        ["7","8","9","/"],
-        ["4","5","6","*"],
-        ["1","2","3","-"],
-        ["0",".","=","+"],
-        ["C"],
-    ]
+def mis_week_button(name: str):
+    is_active = (SubjectState.mis_active_week == name)
+    return rx.button(
+        name,
+        on_click=lambda: SubjectState.set_mis_week(name),
+        background_color=rx.cond(is_active, "#3b82f6", "#f8fafc"),
+        color=rx.cond(is_active, "#ffffff", "#1e293b"),
+        border=rx.cond(is_active, "1px solid #3b82f6", "1px solid #e2e8f0"),
+        _hover={"background_color": rx.cond(is_active, "#2563eb", "#f1f5f9")},
+        padding="8px 16px",
+        font_size="13px",
+        cursor="pointer",
+    )
+
+
+def render_operating_systems():
     return rx.vstack(
-        rx.box(
-            rx.text(OSState.calc_input, color="#94a3b8",
-                    font_size="13px", text_align="right"),
-            rx.text(OSState.calc_result, color="white",
-                    font_size="28px", font_weight="700", text_align="right"),
-            background="rgba(0,0,0,0.3)", padding="12px",
-            border_radius="8px", width="100%",
-        ),
+        rx.heading("🖥️ Operating Systems (OS)", size="6", color="#1e3a8a"),
+        rx.text("Study of computer system architectures, process scheduling, memory management, and file systems operations.", color="#475569"),
+        rx.divider(border_color="#e2e8f0"),
         rx.vstack(
-            *[
-                rx.hstack(
-                    *[
-                        rx.button(
-                            btn, on_click=OSState.calc_press(btn),
-                            width="60px", height="44px", size="2",
-                            color_scheme="violet" if btn in ["=","C"] else "gray",
+            rx.heading("Key Learning Modules", size="4", color="#0f172a"),
+            rx.markdown("""
+            * **Process Management:** CPU scheduling algorithms (FIFO, Round Robin, Shortest Job First).
+            * **Memory Management:** Virtual memory, paging, segmentation, and thrashing processes.
+            * **Storage & File Systems:** Disk allocation methods, directory structures, and journal file recovery (ext4, NTFS).
+            * **Concurrency Control:** Deadlocks detection, prevention strategies, and thread synchronization.
+            """),
+            align="start",
+            spacing="3",
+        ),
+        style=CONTENT_CONTAINER,
+        spacing="4",
+    )
+
+
+def render_mis_it():
+    return rx.vstack(
+        rx.heading("📊 Management Information Systems (MIS/IT)", size="6", color="#1e3a8a"),
+        rx.text("Integrating foundational systems operations, IT infrastructure configuration, and disaster coordination planning.", color="#475569"),
+        rx.divider(border_color="#e2e8f0"),
+        
+        # Sub-navigation for Weeks 1-3
+        rx.hstack(
+            mis_week_button("Week 1: Virtualization"),
+            mis_week_button("Week 2: Bootable USB & Hardware"),
+            mis_week_button("Week 3: Survival Scenario"),
+            spacing="3",
+            width="100%",
+            wrap="wrap",
+        ),
+        
+        # Dynamic Week Contents
+        rx.match(
+            SubjectState.mis_active_week,
+            ("Week 1: Virtualization", rx.vstack(
+                rx.heading("Week 1: Virtualization & Hypervisors", size="5", color="#1e3a8a"),
+                rx.markdown("""
+                Virtualization uses software to create an abstraction layer over physical computer hardware. This allows a single physical machine to host multiple isolated **Virtual Machines (VMs)**.
+                
+                ##### Why Virtualize in MIS?
+                * **Server Consolidation:** Running multiple OS workloads on one physical computer, reducing hardware footprint.
+                * **Disaster Recovery:** Encapsulating environments inside single transportable virtual disk files.
+                * **Sandbox Security:** Safely launching unverified programs in isolated systems.
+                
+                ##### 📦 Curated ISO File Library
+                The following bootable operating system files are recommended for weekly labs:
+                """),
+                rx.table.root(
+                    rx.table.header(
+                        rx.table.row(
+                            rx.table.column_header_cell("OS"),
+                            rx.table.column_header_cell("Edition"),
+                            rx.table.column_header_cell("RAM Recommend"),
+                            rx.table.column_header_cell("Primary Sandbox Purpose"),
                         )
-                        for btn in row
-                    ],
-                    spacing="2",
-                )
-                for row in rows
-            ],
-            spacing="2",
-        ),
-        align="center", padding="16px", spacing="3",
-    )
-
-
-def terminal_body():
-    return rx.vstack(
-        rx.box(
-            rx.foreach(
-                OSState.terminal_logs,
-                lambda line: rx.text(line, color="#4ade80",
-                                     font_family="monospace", font_size="13px"),
-            ),
-            background="rgba(0,0,0,0.5)", padding="12px",
-            border_radius="6px", height="200px",
-            overflow_y="auto", width="100%",
-        ),
-        rx.hstack(
-            rx.text("$ ", color="#4ade80", font_family="monospace"),
-            rx.input(
-                value=OSState.terminal_input,
-                on_change=OSState.set_terminal_input,
-                on_key_down=OSState.handle_terminal_key,
-                placeholder="type a command…",
-                background="transparent", border="none",
-                color="#4ade80", font_family="monospace",
-                width="100%", _focus={"outline": "none"},
-            ),
-            width="100%",
-        ),
-        align="start", padding="16px", spacing="3", width="100%",
-    )
-
-
-def notepad_body():
-    return rx.vstack(
-        rx.text_area(
-            value=OSState.notepad_text,
-            on_change=OSState.set_notepad_text,
-            height="240px", width="100%",
-            background="rgba(0,0,0,0.3)", color="white",
-            border="1px solid rgba(255,255,255,0.1)",
-            border_radius="6px", padding="10px",
-            font_family="monospace", font_size="13px", resize="none",
-        ),
-        align="start", padding="16px", width="100%",
-    )
-
-
-def sysmon_body():
-    return rx.vstack(
-        rx.text("Active Processes", color="#a78bfa", font_weight="600"),
-        rx.foreach(
-            OSState.active_windows,
-            lambda title: rx.hstack(
-                rx.icon(tag="cpu", size=14, color="#4ade80"),
-                rx.text(title, color="white", font_size="13px"),
-                spacing="2",
-            )
-        ),
-        rx.divider(color="rgba(255,255,255,0.1)"),
-        rx.text(
-            rx.cond(OSState.is_nominal, "● Nominal", "● Loading…"),
-            color=rx.cond(OSState.is_nominal, "#4ade80", "#facc15"),
-            font_size="13px",
-        ),
-        rx.text(OSState.status_message, color="#94a3b8", font_size="12px"),
-        align="start", padding="16px", spacing="2",
-    )
-
-
-def window_body(title: str):
-    return rx.cond(title == "File Explorer", file_explorer_body(),
-           rx.cond(title == "Calculator",    calculator_body(),
-           rx.cond(title == "Terminal",      terminal_body(),
-           rx.cond(title == "Notepad",       notepad_body(),
-                                             sysmon_body()))))
-
-
-def render_window(title: str):
-    return rx.box(
-        # Header
-        rx.hstack(
-            rx.hstack(
-                rx.icon(tag="monitor", size=14, color="#a78bfa"),
-                rx.text(title, color="white", font_size="13px", font_weight="600"),
-                spacing="2",
-            ),
-            rx.button(
-                rx.icon(tag="x", size=12),
-                on_click=OSState.close_app(title),
-                size="1", color_scheme="ruby",
-                border_radius="50%", width="22px", height="22px",
-            ),
-            **HDR_STYLE,
-            width="100%",
-        ),
-        window_body(title),
-        **WIN_STYLE,
-    )
-
-
-# ── Taskbar ───────────────────────────────────────────────────────────────────
-def taskbar():
-    return rx.box(
-        rx.button(
-            rx.icon(tag="grid-2x2", size=16),
-            rx.text("EduOS", font_weight="700", font_size="13px"),
-            on_click=OSState.toggle_start_menu,
-            background="linear-gradient(135deg,#7c3aed,#4f46e5)",
-            color="white", border="none", border_radius="8px",
-            padding="0 14px", height="32px", cursor="pointer",
-            display="flex", align_items="center", gap="6px",
-        ),
-        rx.divider(orientation="vertical", height="28px",
-                   color="rgba(255,255,255,0.15)"),
-        rx.foreach(
-            OSState.active_windows,
-            lambda t: rx.box(
-                rx.text(t, color="white", font_size="12px"),
-                background="rgba(255,255,255,0.08)",
-                border="1px solid rgba(255,255,255,0.12)",
-                border_radius="6px", padding="4px 12px", cursor="pointer",
-            )
-        ),
-        rx.spacer(),
-        rx.text("EduOS on CasaOS", color="#94a3b8", font_size="11px"),
-        **TASKBAR,
-    )
-
-
-# ── Start menu ────────────────────────────────────────────────────────────────
-def start_menu():
-    return rx.cond(
-        OSState.start_menu_open,
-        rx.box(
-            rx.vstack(
-                rx.text("Study Materials", color="white",
-                        font_weight="700", font_size="15px",
-                        border_bottom="1px solid rgba(255,255,255,0.1)",
-                        padding_bottom="8px", width="100%"),
-                *[
-                    rx.vstack(
-                        rx.text(subject, color="#a78bfa",
-                                font_size="12px", font_weight="600"),
-                        *[
-                            rx.text(f"  • {item}", color="#cbd5e1",
-                                    font_size="12px", cursor="pointer",
-                                    _hover={"color": "white"})
-                            for item in items
-                        ],
-                        align="start", spacing="1",
-                    )
-                    for subject, items in SUBJECTS.items()
-                ],
-                align="start", spacing="3", width="100%",
-            ),
-            position="fixed", bottom="52px", left="16px",
-            width="220px",
-            background="rgba(15,15,30,0.95)",
-            backdrop_filter="blur(20px)",
-            border="1px solid rgba(255,255,255,0.12)",
-            border_radius="12px", padding="16px", z_index="200",
-        ),
-    )
-
-
-# ── Desktop icons ─────────────────────────────────────────────────────────────
-def desktop_icons():
-    return rx.vstack(
-        *[
-            rx.box(
-                rx.vstack(
-                    rx.icon(tag=icon, size=32, color="#a78bfa"),
-                    rx.text(label, color="white", font_size="11px",
-                            text_align="center"),
-                    spacing="1", align="center",
+                    ),
+                    rx.table.body(
+                        rx.table.row(
+                            rx.table.cell("Ubuntu Desktop 24.04"), rx.table.cell("LTS (Standard)"), rx.table.cell("4 GB"), rx.table.cell("CLI & Desktop lab operations"),
+                        ),
+                        rx.table.row(
+                            rx.table.cell("Ubuntu Server 24.04"), rx.table.cell("LTS (Headless)"), rx.table.cell("2 GB"), rx.table.cell("DBMS and lightweight hosting labs"),
+                        ),
+                        rx.table.row(
+                            rx.table.cell("Debian 12"), rx.table.cell("Netinst Installer"), rx.table.cell("1 GB"), rx.table.cell("High-security, custom system setup"),
+                        ),
+                        rx.table.row(
+                            rx.table.cell("Alpine Linux"), rx.table.cell("Extended ISO"), rx.table.cell("256 MB"), rx.table.cell("Minimal, low-resource environment testing"),
+                        ),
+                    ),
+                    width="100%",
                 ),
-                on_click=OSState.open_app(label),
-                **ICO_STYLE,
-            )
-            for icon, label in APPS
-        ],
-        position="absolute", top="24px", left="24px", spacing="2",
-    )
-
-
-# ── Root page ─────────────────────────────────────────────────────────────────
-def index():
-    return rx.box(
-        # Ambient glow
-        rx.box(
-            position="absolute", top="0", left="0", right="0", bottom="0",
-            background=(
-                "radial-gradient(ellipse at 20% 50%,rgba(124,58,237,0.15) 0%,transparent 60%),"
-                "radial-gradient(ellipse at 80% 20%,rgba(79,70,229,0.1) 0%,transparent 50%)"
-            ),
-            pointer_events="none",
+                rx.divider(border_color="#f1f5f9"),
+                rx.heading("Hypervisor Performance Trade-Off Simulator", size="4", color="#0f172a"),
+                rx.select(
+                    ["Type 1: Bare-Metal", "Type 2: Hosted"],
+                    value=SubjectState.week1_hypervisor_type,
+                    on_change=SubjectState.set_hypervisor_type,
+                ),
+                rx.callout(
+                    SubjectState.week1_simulation_result,
+                    icon="info",
+                    color_scheme="blue",
+                    width="100%",
+                ),
+                align="start",
+                spacing="4",
+                width="100%",
+            )),
+            ("Week 2: Bootable USB & Hardware", rx.vstack(
+                rx.heading("Week 2: Bootable USBs & Computer Hardware", size="5", color="#1e3a8a"),
+                rx.markdown("""
+                To successfully install virtual machine platforms or carry out disaster recoveries, technicians must understand system hardware layout and the creation of live installation media.
+                
+                ##### 💾 Bootable Media Creation
+                1. **Download the Target ISO:** Obtain an installation image from official repositories.
+                2. **Choose the Utility:** Rufus (Windows), BalenaEtcher (Cross-platform), or Ventoy (Multiboot support).
+                3. **Select Boot Scheme:** Configure partitions for modern **UEFI** (GPT) or Legacy **BIOS** (MBR) systems.
+                
+                ##### 🖥️ IT Hardware Foundations
+                * **CPU:** Process execution cores versus clock frequencies. Core counts are optimized for database operations.
+                * **RAM:** Volatile work registers that dictate the active running capacity of hosted VM environments.
+                * **Storage:** Solid State Drives (NVMe SSD) versus Hard Disk Drives (SATA HDD). NVMe avoids structural database write bottleneck constraints.
+                """),
+                rx.divider(border_color="#f1f5f9"),
+                rx.heading("Flashing Duration Estimator", size="4", color="#0f172a"),
+                rx.text("ISO Image Size (GB):"),
+                rx.slider(
+                    min=0.5,
+                    max=32.0,
+                    step=0.1,
+                    value=SubjectState.week2_iso_size,
+                    on_change=SubjectState.set_value("week2_iso_size"),
+                ),
+                rx.text(SubjectState.week2_iso_size.to_string() + " GB"),
+                rx.text("USB Write Speed (MB/s):"),
+                rx.slider(
+                    min=5,
+                    max=150,
+                    step=5,
+                    value=SubjectState.week2_usb_speed,
+                    on_change=SubjectState.set_value("week2_usb_speed"),
+                ),
+                rx.text(SubjectState.week2_usb_speed.to_string() + " MB/s"),
+                rx.hstack(
+                    rx.text("Estimated Flashing Duration: ", font_weight="600"),
+                    rx.badge(SubjectState.week2_flash_duration, color_scheme="green"),
+                ),
+                align="start",
+                spacing="3",
+                width="100%",
+            )),
+            ("Week 3: Survival Scenario", rx.vstack(
+                rx.heading("Week 3: Scenario Launch — Post-Apocalyptic Grid Collapse", size="5", color="#ef4444"),
+                rx.callout(
+                    "EMERGENCY SCENARIO ACTIVE: Year 2028. Global grid is completely offline. A cohort of 5.0M to 5.5M survivors has gathered near clean water basins. Systems administrators must build decentralized LANs, manage resource allocations, and ensure coordination systems operate under severe resource deficits.",
+                    icon="alert_triangle",
+                    color_scheme="red",
+                ),
+                rx.markdown("""
+                ##### Objective:
+                Apply standard IT infrastructure concepts (databases, network topologies, memory constraints) under the simulation constraints of a low-energy, hardware-scavenged society.
+                """),
+                rx.divider(border_color="#f1f5f9"),
+                rx.heading("Scenario Resource Calculator", size="4", color="#0f172a"),
+                rx.hstack(
+                    rx.vstack(
+                        rx.text("Solar Panels Scavenged (100W units):"),
+                        rx.slider(
+                            min=100,
+                            max=10000,
+                            step=100,
+                            value=SubjectState.week3_solar_panels,
+                            on_change=SubjectState.set_value("week3_solar_panels"),
+                        ),
+                        rx.text(SubjectState.week3_solar_panels.to_string()),
+                        align="start",
+                    ),
+                    rx.vstack(
+                        rx.text("Water Purification (Liters/Hour):"),
+                        rx.slider(
+                            min=1000,
+                            max=50000,
+                            step=1000,
+                            value=SubjectState.week3_water_flow,
+                            on_change=SubjectState.set_value("week3_water_flow"),
+                        ),
+                        rx.text(SubjectState.week3_water_flow.to_string()),
+                        align="start",
+                    ),
+                    spacing="6",
+                    width="100%",
+                ),
+                rx.vstack(
+                    rx.hstack(
+                        rx.text("Continuous Solar Power Output: ", font_weight="600"),
+                        rx.text(SubjectState.week3_power_available),
+                    ),
+                    rx.hstack(
+                        rx.text("Community Hydration Capability: ", font_weight="600"),
+                        rx.text(SubjectState.week3_water_capacity),
+                    ),
+                    align="start",
+                    spacing="1",
+                ),
+                align="start",
+                spacing="4",
+                width="100%",
+            )),
         ),
-        desktop_icons(),
-        rx.foreach(OSState.active_windows, render_window),
-        start_menu(),
-        taskbar(),
-        **DESKTOP_BG,
+        style=CONTENT_CONTAINER,
+        spacing="4",
+        width="100%",
     )
 
 
-app = rx.App(
-    stylesheets=[
-        "https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
-    ],
-)
-app.add_page(index, title="EduOS — CasaOS Edition")
+def render_intro_ai():
+    return rx.vstack(
+        rx.heading("🤖 Introduction to Artificial Intelligence", size="6", color="#1e3a8a"),
+        rx.text("Fundamental structures of machine intelligence, problem-solving, logic, search spaces, and modern machine learning frameworks.", color="#475569"),
+        rx.divider(border_color="#e2e8f0"),
+        rx.vstack(
+            rx.heading("Key Learning Modules", size="4", color="#0f172a"),
+            rx.markdown("""
+            * **Search Algorithms:** Uninformed (BFS, DFS) and informed heuristics (A* Search).
+            * **Knowledge Representation:** Propositional logic, inference rules, and semantic webs.
+            * **Machine Learning Baselines:** Regression, classification trees, and neural network basics.
+            * **Ethics in AI:** Transparency, bias detection, and societal implications of automated systems.
+            """),
+            align="start",
+            spacing="3",
+        ),
+        style=CONTENT_CONTAINER,
+        spacing="4",
+    )
+
+
+def render_mot():
+    return rx.vstack(
+        rx.heading("📈 Management of Technology (MOT)", size="6", color="#1e3a8a"),
+        rx.text("Frameworks for evaluating, acquiring, deploying, and optimizing emerging technology infrastructures in modern firms.", color="#475569"),
+        rx.divider(border_color="#e2e8f0"),
+        rx.vstack(
+            rx.heading("Key Learning Modules", size="4", color="#0f172a"),
+            rx.markdown("""
+            * **Technology Life Cycles:** S-curves, diffusion theories, and disruptive technology models.
+            * **Innovation Strategy:** Research & development management, design thinking, and intellectual property.
+            * **Tech Acquisition:** Make-or-buy analysis, cloud migrations vs. on-premises architectures, and vendor audits.
+            * **Change Management:** Overcoming organizational friction during enterprise system integrations.
+            """),
+            align="start",
+            spacing="3",
+        ),
+        style=CONTENT_CONTAINER,
+        spacing="4",
+    )
+
+
+def index() -> rx.Component:
+    return rx.center(
+        rx.vstack(
+            # Page Title / Rebrand header
+            rx.vstack(
+                rx.heading("🎓 Professor Max's Curriculum Portal", size="8", color="#1e3a8a"),
+                rx.text("Interactive Academic Syllabus and Laboratory Hub", color="#475569", font_size="16px"),
+                align="center",
+                spacing="1",
+                margin_bottom="12px",
+            ),
+            
+            # Nav bar for subjects
+            rx.hstack(
+                syllabus_tab_button("Operating Systems"),
+                syllabus_tab_button("MIS/IT"),
+                syllabus_tab_button("Introduction to AI"),
+                syllabus_tab_button("MOT"),
+                spacing="3",
+                justify="center",
+                width="100%",
+                margin_bottom="16px",
+            ),
+            
+            # Dynamic tab container
+            rx.match(
+                SubjectState.current_tab,
+                ("Operating Systems", render_operating_systems()),
+                ("MIS/IT", render_mis_it()),
+                ("Introduction to AI", render_intro_ai()),
+                ("MOT", render_mot()),
+            ),
+            
+            width="100%",
+            max_width="1000px",
+            padding="24px",
+            spacing="4",
+        ),
+        background_color="#f1f5f9",
+        min_height="100vh",
+        width="100%",
+    )
+
+
+app = rx.App()
+app.add_page(index, title="Curriculum Portal")
